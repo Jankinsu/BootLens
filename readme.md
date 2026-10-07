@@ -1184,7 +1184,7 @@ README 应始终反映：
 Phase 0 已完成
 Phase 1 启动历史 CLI 初版已完成
 Phase 1 轻量 GUI 原型已实现
-Phase 2 Registry Run 启动项发现已实现
+Phase 2 Registry Run 与 Startup Folder 启动项发现已实现
 ```
 
 Phase 0 已经完成：
@@ -1227,6 +1227,7 @@ GUI 原型采用 Windows PowerShell 5.1 + WPF：
 
 ```powershell
 .\bootlens-startup.ps1
+.\bootlens-startup.ps1 -Source StartupFolder
 .\bootlens-startup.ps1 -ShowCommand
 .\bootlens-startup.ps1 -AsJson
 ```
@@ -1240,7 +1241,15 @@ Registry Run Provider 当前提供：
 - 稳定来源身份；
 - 无法可靠解析时显示 `Unknown`。
 
-2026-10-07 已使用本机真实注册表完成验证：发现 18 条登录启动配置，其中 13 条命令成功解析，5 条保持 `Unresolved`。
+Startup Folder Provider 当前提供：
+
+- Current User 与 Common Startup 已知文件夹；
+- `.lnk` Target、Arguments 与 WorkingDirectory 解析；
+- 直接文件发现；
+- `desktop.ini` 与子目录排除；
+- UNC 目标不主动进行网络探测。
+
+2026-10-07 已使用本机真实数据完成验证：发现 18 条 Registry Run 配置和 2 条 Startup Folder 快捷方式，共 20 条登录启动配置。
 
 CLI 当前提供：
 
@@ -1273,7 +1282,7 @@ shutdown /s /t 0 后开机          = 完整启动
 
 当前任务：
 
-> 验证 Startup Folder 的文件与快捷方式语义，建立下一种只读启动项来源。
+> 将统一 `StartupItem` v2 数据接入 GUI 的第二个页面。
 
 ---
 

@@ -172,7 +172,7 @@ function ConvertTo-RegistryRunStartupItem {
         [Uri]::EscapeDataString($Name)
 
     [pscustomobject][ordered]@{
-        SchemaVersion       = 1
+        SchemaVersion       = 2
         Name                = $Name
         Source              = 'RegistryRun'
         Trigger             = 'UserLogon'
@@ -190,6 +190,158 @@ function ConvertTo-RegistryRunStartupItem {
         RegistryKeyPath     = $script:RegistryRunKeyPath
         RegistryValueName   = $Name
         RegistryValueKind   = $RegistryValueKind
+        StartupFolderKind   = $null
+        StartupFolderPath   = $null
+        StartupEntryPath    = $null
+        StartupEntryType    = $null
+        ShortcutTargetPath  = $null
+        ShortcutArguments   = $null
+        ShortcutWorkingPath = $null
+        SourceIdentity      = $sourceIdentity
+    }
+}
+
+function Get-ShortcutInfo {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    $shell = $null
+    $shortcut = $null
+
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut($Path)
+
+        [pscustomobject]@{
+            TargetPath       = [string]$shortcut.TargetPath
+            Arguments        = [string]$shortcut.Arguments
+            WorkingDirectory = [string]$shortcut.WorkingDirectory
+        }
+    }
+    finally {
+        if ($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)) {
+            $null = [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut)
+        }
+
+        if ($null -ne $shell -and [Runtime.InteropServices.Marshal]::IsComObject($shell)) {
+            $null = [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
+        }
+    }
+}
+
+function ConvertTo-StartupFolderStartupItem {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$EntryPath,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('CurrentUser', 'LocalMachine')]
+        [string]$Scope,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('UserStartup', 'CommonStartup')]
+        [string]$StartupFolderKind,
+
+        [Parameter(Mandatory)]
+        [string]$StartupFolderPath
+    )
+
+    $entry = Get-Item -LiteralPath $EntryPath -Force -ErrorAction Stop
+
+    if ($entry.PSIsContainer -or $entry.Name -ieq 'desktop.ini') {
+        return
+    }
+
+    $entryType = if ($entry.Extension -ieq '.lnk') {
+        'Shortcut'
+    }
+    else {
+        'File'
+    }
+    $name = [IO.Path]::GetFileNameWithoutExtension($entry.Name)
+    $executablePath = $null
+    $arguments = $null
+    $parseStatus = 'Unresolved'
+    $executableExists = $null
+    $publisher = $null
+    $shortcutTargetPath = $null
+    $shortcutArguments = $null
+    $shortcutWorkingPath = $null
+
+    if ($entryType -eq 'Shortcut') {
+        try {
+            $shortcut = Get-ShortcutInfo -Path $entry.FullName
+            $shortcutTargetPath = $shortcut.TargetPath
+            $shortcutArguments = if ([string]::IsNullOrWhiteSpace($shortcut.Arguments)) {
+                $null
+            }
+            else {
+                $shortcut.Arguments
+            }
+            $shortcutWorkingPath = if ([string]::IsNullOrWhiteSpace($shortcut.WorkingDirectory)) {
+                $null
+            }
+            else {
+                $shortcut.WorkingDirectory
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($shortcutTargetPath)) {
+                $executablePath = $shortcutTargetPath
+                $arguments = $shortcutArguments
+                $parseStatus = 'Resolved'
+            }
+        }
+        catch {
+            Write-Verbose "Could not resolve shortcut '$($entry.FullName)': $($_.Exception.Message)"
+        }
+    }
+    else {
+        $executablePath = $entry.FullName
+        $parseStatus = 'Resolved'
+    }
+
+    if ($parseStatus -eq 'Resolved' -and
+        (Test-LocalAbsolutePath -Path $executablePath)) {
+        $executableExists = [bool](Test-Path -LiteralPath $executablePath -PathType Leaf)
+
+        if ($executableExists) {
+            $publisher = Get-FilePublisher -Path $executablePath
+        }
+    }
+
+    $sourceIdentity = 'StartupFolder|{0}|{1}' -f
+        $Scope,
+        [Uri]::EscapeDataString($entry.FullName)
+
+    [pscustomobject][ordered]@{
+        SchemaVersion       = 2
+        Name                = $name
+        Source              = 'StartupFolder'
+        Trigger             = 'UserLogon'
+        Scope               = $Scope
+        CommandLineRaw      = $null
+        CommandLineExpanded = $null
+        ExecutablePath      = $executablePath
+        Arguments           = $arguments
+        CommandParseStatus  = $parseStatus
+        ExecutableExists    = $executableExists
+        Publisher           = $publisher
+        EnabledState        = 'Unknown'
+        RegistryHive        = $null
+        RegistryView        = $null
+        RegistryKeyPath     = $null
+        RegistryValueName   = $null
+        RegistryValueKind   = $null
+        StartupFolderKind   = $StartupFolderKind
+        StartupFolderPath   = $StartupFolderPath
+        StartupEntryPath    = $entry.FullName
+        StartupEntryType    = $entryType
+        ShortcutTargetPath  = $shortcutTargetPath
+        ShortcutArguments   = $shortcutArguments
+        ShortcutWorkingPath = $shortcutWorkingPath
         SourceIdentity      = $sourceIdentity
     }
 }
@@ -309,7 +461,73 @@ function Get-RegistryRunStartupItem {
     return @($items | Sort-Object Scope, Name, RegistryView)
 }
 
+function Read-StartupFolder {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('CurrentUser', 'LocalMachine')]
+        [string]$Scope,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('UserStartup', 'CommonStartup')]
+        [string]$StartupFolderKind
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Container)) {
+        Write-Verbose "Startup folder does not exist for $Scope / $StartupFolderKind."
+        return
+    }
+
+    foreach ($entry in @(Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue | Sort-Object Name)) {
+        try {
+            ConvertTo-StartupFolderStartupItem `
+                -EntryPath $entry.FullName `
+                -Scope $Scope `
+                -StartupFolderKind $StartupFolderKind `
+                -StartupFolderPath $Path
+        }
+        catch {
+            Write-Verbose "Excluded Startup Folder entry '$($entry.FullName)': $($_.Exception.Message)"
+        }
+    }
+}
+
+function Get-StartupFolderStartupItem {
+    [CmdletBinding()]
+    param()
+
+    $items = @(
+        Read-StartupFolder `
+            -Path ([Environment]::GetFolderPath('Startup')) `
+            -Scope 'CurrentUser' `
+            -StartupFolderKind 'UserStartup'
+        Read-StartupFolder `
+            -Path ([Environment]::GetFolderPath('CommonStartup')) `
+            -Scope 'LocalMachine' `
+            -StartupFolderKind 'CommonStartup'
+    )
+
+    return @($items | Sort-Object Scope, Name)
+}
+
+function Get-BootLensStartupItem {
+    [CmdletBinding()]
+    param()
+
+    $items = @(
+        Get-RegistryRunStartupItem
+        Get-StartupFolderStartupItem
+    )
+
+    return @($items | Sort-Object Source, Scope, Name)
+}
+
 Export-ModuleMember -Function `
     ConvertTo-StartupCommandInfo, `
     ConvertTo-RegistryRunStartupItem, `
-    Get-RegistryRunStartupItem
+    ConvertTo-StartupFolderStartupItem, `
+    Get-RegistryRunStartupItem, `
+    Get-StartupFolderStartupItem, `
+    Get-BootLensStartupItem

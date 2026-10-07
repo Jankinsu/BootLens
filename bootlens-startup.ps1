@@ -1,5 +1,8 @@
 [CmdletBinding()]
 param(
+    [ValidateSet('All', 'RegistryRun', 'StartupFolder')]
+    [string]$Source = 'All',
+
     [switch]$AsJson,
 
     [switch]$ShowCommand
@@ -10,7 +13,11 @@ $ErrorActionPreference = 'Stop'
 
 Import-Module (Join-Path $PSScriptRoot 'scripts\BootLens.Startup.psm1') -Force
 
-$items = @(Get-RegistryRunStartupItem)
+$items = switch ($Source) {
+    'RegistryRun' { @(Get-RegistryRunStartupItem) }
+    'StartupFolder' { @(Get-StartupFolderStartupItem) }
+    default { @(Get-BootLensStartupItem) }
+}
 
 if ($AsJson) {
     $items | ConvertTo-Json -Depth 4
@@ -21,6 +28,11 @@ Write-Output 'BootLens Startup Items'
 Write-Output ''
 Write-Output ('Configured logon items: {0}' -f $items.Count)
 Write-Output 'Enabled state: Unknown (not inferred from undocumented data)'
+
+foreach ($sourceGroup in @($items | Group-Object Source | Sort-Object Name)) {
+    Write-Output ('  {0}: {1}' -f $sourceGroup.Name, $sourceGroup.Count)
+}
+
 Write-Output ''
 
 if ($items.Count -eq 0) {
@@ -30,15 +42,27 @@ if ($items.Count -eq 0) {
 
 if ($ShowCommand) {
     $items |
-        Select-Object Name, Scope, RegistryView, CommandParseStatus, CommandLineRaw |
+        Select-Object `
+            Name,
+            Source,
+            Scope,
+            CommandParseStatus,
+            @{ Name = 'SourceDetail'; Expression = {
+                if ($_.Source -eq 'RegistryRun') {
+                    $_.CommandLineRaw
+                }
+                else {
+                    $_.StartupEntryPath
+                }
+            } } |
         Format-Table -Wrap -AutoSize
 }
 else {
     $items |
         Select-Object `
             Name,
+            Source,
             Scope,
-            RegistryView,
             @{ Name = 'Executable'; Expression = {
                 if ($_.CommandParseStatus -eq 'Resolved') {
                     $_.ExecutablePath
