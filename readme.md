@@ -1184,7 +1184,7 @@ README 应始终反映：
 Phase 0 已完成
 Phase 1 启动历史 CLI 初版已完成
 Phase 1 轻量 GUI 原型已实现
-Phase 2 Registry Run、Startup Folder 与 Scheduled Tasks 启动项发现已实现
+Phase 2 Registry Run、Startup Folder、Scheduled Tasks 与 Windows Services 启动项发现已实现
 Phase 2 启动项 GUI 页面已实现
 ```
 
@@ -1227,14 +1227,15 @@ GUI 原型采用 Windows PowerShell 5.1 + WPF：
 GUI 当前包含两个只读页面：
 
 - 启动历史：完整启动耗时、阶段构成与最近记录；
-- 启动项：Registry Run、Startup Folder 与 Scheduled Tasks 来源、作用域、目标路径、Publisher、解析状态和启用状态；支持名称/目标搜索及来源筛选。
+- 启动项：Registry Run、Startup Folder、Scheduled Tasks 与 Windows Services 来源、作用域、目标路径、Publisher、解析状态和启动状态；支持名称/目标搜索及来源筛选。
 
-当前已有 Phase 2 Registry Run CLI：
+当前已有 Phase 2 启动项发现 CLI：
 
 ```powershell
 .\bootlens-startup.ps1
 .\bootlens-startup.ps1 -Source StartupFolder
 .\bootlens-startup.ps1 -Source ScheduledTask
+.\bootlens-startup.ps1 -Source WindowsService
 .\bootlens-startup.ps1 -ShowCommand
 .\bootlens-startup.ps1 -AsJson
 ```
@@ -1264,7 +1265,14 @@ Scheduled Tasks Provider 当前提供：
 - 使用公开 Task Settings 与 Trigger Enabled 字段判断配置启用状态；
 - 普通权限无法枚举时局部降级，不影响其他启动项来源。
 
-2026-10-07 已使用本机真实数据完成验证：发现 18 条 Registry Run 配置、2 条 Startup Folder 快捷方式和 45 条用户登录触发计划任务，共 65 条登录启动配置。计划任务完整枚举在当前机器上需要管理员权限。
+Windows Services Provider 当前提供：
+
+- 只读发现 SCM 当前枚举的自动启动服务；
+- 保留服务命令、启动账户、服务类型及扫描时状态；
+- 单独标记延迟自动启动；
+- 手动触发服务及 Boot/System 驱动不混入自动启动服务列表。
+
+2026-10-07 已使用本机真实数据完成验证：发现 18 条 Registry Run 配置、2 条 Startup Folder 快捷方式、45 条用户登录触发计划任务和 84 条自动启动 Windows Services，共 149 条启动配置；其中 14 个服务为延迟自动启动。计划任务完整枚举需要管理员权限。
 
 CLI 当前提供：
 
@@ -1297,7 +1305,7 @@ shutdown /s /t 0 后开机          = 完整启动
 
 当前任务：
 
-> 确认启动项搜索与来源筛选改善了 GUI 信息密度，再继续增加 Windows Services 来源。
+> 继续评估其他 Phase 2 来源，优先验证 UWP Startup Tasks 的公开发现接口和实际数据范围。
 
 ---
 

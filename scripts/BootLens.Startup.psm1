@@ -77,6 +77,99 @@ function Get-ScheduledTaskObjectType {
     return 'Unknown'
 }
 
+function ConvertTo-WindowsServiceStartupItem {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$Service,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('String', 'ExpandString')]
+        [string]$ImagePathKind,
+
+        [AllowEmptyString()]
+        [string]$ImagePathRaw,
+
+        [bool]$DelayedAutoStart = $false,
+
+        [AllowNull()]
+        [string]$StartName,
+
+        [int]$ServiceType
+    )
+
+    $serviceName = [string](Get-OptionalPropertyValue -InputObject $Service -Name 'Name')
+
+    if ([string]::IsNullOrWhiteSpace($serviceName)) {
+        return
+    }
+
+    $displayName = [string](Get-OptionalPropertyValue -InputObject $Service -Name 'DisplayName')
+    $name = if ([string]::IsNullOrWhiteSpace($displayName)) { $serviceName } else { $displayName }
+    $command = if ([string]::IsNullOrWhiteSpace($ImagePathRaw)) {
+        [pscustomobject]@{
+            CommandLineExpanded = $null
+            ExecutablePath = $null
+            Arguments = $null
+            CommandParseStatus = 'Unresolved'
+            ExecutableExists = $null
+            Publisher = $null
+        }
+    }
+    else {
+        ConvertTo-StartupCommandInfo -CommandLine $ImagePathRaw -ValueKind $ImagePathKind
+    }
+    $sourceIdentity = 'WindowsService|{0}' -f [Uri]::EscapeDataString($serviceName)
+
+    [pscustomobject][ordered]@{
+        SchemaVersion       = 4
+        Name                = $name
+        Source              = 'WindowsService'
+        Trigger             = 'SystemStartup'
+        Scope               = 'LocalMachine'
+        CommandLineRaw      = $ImagePathRaw
+        CommandLineExpanded = $command.CommandLineExpanded
+        ExecutablePath      = $command.ExecutablePath
+        Arguments           = $command.Arguments
+        CommandParseStatus  = $command.CommandParseStatus
+        ExecutableExists    = $command.ExecutableExists
+        Publisher           = $command.Publisher
+        EnabledState        = 'Enabled'
+        RegistryHive        = $null
+        RegistryView        = $null
+        RegistryKeyPath     = $null
+        RegistryValueName   = $null
+        RegistryValueKind   = $null
+        StartupFolderKind   = $null
+        StartupFolderPath   = $null
+        StartupEntryPath    = $null
+        StartupEntryType    = $null
+        ShortcutTargetPath  = $null
+        ShortcutArguments   = $null
+        ShortcutWorkingPath = $null
+        TaskPath            = $null
+        TaskName            = $null
+        TaskState           = $null
+        TaskEnabled         = $null
+        TaskHidden          = $null
+        TaskAuthor          = $null
+        TaskDescription     = $null
+        TaskPrincipalUserId = $null
+        TaskPrincipalLogonType = $null
+        TaskPrincipalRunLevel  = $null
+        TaskLogonAudience   = $null
+        TaskLogonTriggers   = $null
+        TaskActions         = $null
+        ServiceName         = $serviceName
+        ServiceStartMode    = 'Auto'
+        ServiceDelayedAutoStart = $DelayedAutoStart
+        ServiceState        = [string](Get-OptionalPropertyValue -InputObject $Service -Name 'Status')
+        ServiceStartName    = $StartName
+        ServiceType         = $ServiceType
+        SourceIdentity      = $sourceIdentity
+    }
+}
+
 function ConvertTo-StartupCommandInfo {
     [CmdletBinding()]
     param(
@@ -216,7 +309,7 @@ function ConvertTo-RegistryRunStartupItem {
         [Uri]::EscapeDataString($Name)
 
     [pscustomobject][ordered]@{
-        SchemaVersion       = 3
+        SchemaVersion       = 4
         Name                = $Name
         Source              = 'RegistryRun'
         Trigger             = 'UserLogon'
@@ -254,6 +347,12 @@ function ConvertTo-RegistryRunStartupItem {
         TaskLogonAudience   = $null
         TaskLogonTriggers   = $null
         TaskActions         = $null
+        ServiceName         = $null
+        ServiceStartMode    = $null
+        ServiceDelayedAutoStart = $null
+        ServiceState        = $null
+        ServiceStartName    = $null
+        ServiceType         = $null
         SourceIdentity      = $sourceIdentity
     }
 }
@@ -374,7 +473,7 @@ function ConvertTo-StartupFolderStartupItem {
         [Uri]::EscapeDataString($entry.FullName)
 
     [pscustomobject][ordered]@{
-        SchemaVersion       = 3
+        SchemaVersion       = 4
         Name                = $name
         Source              = 'StartupFolder'
         Trigger             = 'UserLogon'
@@ -412,6 +511,12 @@ function ConvertTo-StartupFolderStartupItem {
         TaskLogonAudience   = $null
         TaskLogonTriggers   = $null
         TaskActions         = $null
+        ServiceName         = $null
+        ServiceStartMode    = $null
+        ServiceDelayedAutoStart = $null
+        ServiceState        = $null
+        ServiceStartName    = $null
+        ServiceType         = $null
         SourceIdentity      = $sourceIdentity
     }
 }
@@ -546,7 +651,7 @@ function ConvertTo-ScheduledTaskStartupItem {
         [Uri]::EscapeDataString($taskName)
 
     [pscustomobject][ordered]@{
-        SchemaVersion       = 3
+        SchemaVersion       = 4
         Name                = $taskName
         Source              = 'ScheduledTask'
         Trigger             = 'UserLogon'
@@ -584,6 +689,12 @@ function ConvertTo-ScheduledTaskStartupItem {
         TaskLogonAudience   = $logonAudience
         TaskLogonTriggers   = $logonTriggers
         TaskActions         = $actions
+        ServiceName         = $null
+        ServiceStartMode    = $null
+        ServiceDelayedAutoStart = $null
+        ServiceState        = $null
+        ServiceStartName    = $null
+        ServiceType         = $null
         SourceIdentity      = $sourceIdentity
     }
 }
@@ -781,6 +892,111 @@ function Get-ScheduledTaskStartupItem {
     }
 }
 
+function Get-WindowsServiceStartupItem {
+    [CmdletBinding()]
+    param()
+
+    $baseKey = $null
+    $items = New-Object 'System.Collections.Generic.List[object]'
+
+    try {
+        $services = @(Get-Service -ErrorAction Stop)
+        $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+            [Microsoft.Win32.RegistryHive]::LocalMachine,
+            [Microsoft.Win32.RegistryView]::Default
+        )
+
+        foreach ($service in $services) {
+            $serviceKey = $null
+
+            try {
+                $serviceKeyPath = 'SYSTEM\CurrentControlSet\Services\{0}' -f $service.Name
+                $serviceKey = $baseKey.OpenSubKey($serviceKeyPath, $false)
+
+                if ($null -eq $serviceKey) {
+                    Write-Verbose "Skipped service '$($service.Name)': registry configuration is unavailable."
+                    continue
+                }
+
+                $valueNames = @($serviceKey.GetValueNames())
+
+                if ($valueNames -notcontains 'Start' -or
+                    [int]$serviceKey.GetValue('Start') -ne 2) {
+                    continue
+                }
+
+                $imagePathRaw = $null
+                $imagePathKind = 'String'
+
+                if ($valueNames -contains 'ImagePath') {
+                    $imagePathKind = $serviceKey.GetValueKind('ImagePath').ToString()
+
+                    if ($imagePathKind -notin @('String', 'ExpandString')) {
+                        $imagePathKind = 'String'
+                    }
+                    else {
+                        $imagePathRaw = [string]$serviceKey.GetValue(
+                            'ImagePath',
+                            $null,
+                            [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+                        )
+                    }
+                }
+
+                $delayedAutoStart = $false
+
+                if ($valueNames -contains 'DelayedAutoStart') {
+                    $delayedAutoStart = ([int]$serviceKey.GetValue('DelayedAutoStart') -eq 1)
+                }
+
+                $startName = if ($valueNames -contains 'ObjectName') {
+                    [string]$serviceKey.GetValue('ObjectName')
+                }
+                else {
+                    $null
+                }
+                $serviceType = if ($valueNames -contains 'Type') {
+                    [int]$serviceKey.GetValue('Type')
+                }
+                else {
+                    0
+                }
+
+                $item = ConvertTo-WindowsServiceStartupItem `
+                    -Service $service `
+                    -ImagePathKind $imagePathKind `
+                    -ImagePathRaw $imagePathRaw `
+                    -DelayedAutoStart $delayedAutoStart `
+                    -StartName $startName `
+                    -ServiceType $serviceType
+
+                if ($null -ne $item) {
+                    $items.Add($item)
+                }
+            }
+            catch {
+                Write-Verbose "Skipped service '$($service.Name)': $($_.Exception.Message)"
+            }
+            finally {
+                if ($null -ne $serviceKey) {
+                    $serviceKey.Dispose()
+                }
+            }
+        }
+    }
+    catch {
+        Write-Warning "Could not read Windows Services: $($_.Exception.Message)"
+        return @()
+    }
+    finally {
+        if ($null -ne $baseKey) {
+            $baseKey.Dispose()
+        }
+    }
+
+    return @($items | Sort-Object Name, ServiceName)
+}
+
 function Get-BootLensStartupItem {
     [CmdletBinding()]
     param()
@@ -789,6 +1005,7 @@ function Get-BootLensStartupItem {
         Get-RegistryRunStartupItem
         Get-StartupFolderStartupItem
         Get-ScheduledTaskStartupItem
+        Get-WindowsServiceStartupItem
     )
 
     return @($items | Sort-Object Source, Scope, Name)
@@ -799,7 +1016,9 @@ Export-ModuleMember -Function `
     ConvertTo-RegistryRunStartupItem, `
     ConvertTo-StartupFolderStartupItem, `
     ConvertTo-ScheduledTaskStartupItem, `
+    ConvertTo-WindowsServiceStartupItem, `
     Get-RegistryRunStartupItem, `
     Get-StartupFolderStartupItem, `
     Get-ScheduledTaskStartupItem, `
+    Get-WindowsServiceStartupItem, `
     Get-BootLensStartupItem

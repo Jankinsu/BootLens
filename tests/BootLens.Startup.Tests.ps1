@@ -78,7 +78,7 @@ $item = ConvertTo-RegistryRunStartupItem `
     -RegistryValueKind 'String' `
     -Scope 'CurrentUser' `
     -RegistryView 'Shared'
-Assert-Equal 3 $item.SchemaVersion 'StartupItem schema version should be three.'
+Assert-Equal 4 $item.SchemaVersion 'StartupItem schema version should be four.'
 Assert-Equal 'RegistryRun' $item.Source 'StartupItem source should be RegistryRun.'
 Assert-Equal 'UserLogon' $item.Trigger 'Registry Run should use the UserLogon trigger.'
 Assert-Equal 'Unknown' $item.EnabledState 'Enabled state should not be inferred.'
@@ -125,7 +125,7 @@ try {
         -Scope 'CurrentUser' `
         -StartupFolderKind 'UserStartup' `
         -StartupFolderPath $folderTestDirectory
-    Assert-Equal 3 $folderItem.SchemaVersion 'Startup Folder item should use schema version three.'
+    Assert-Equal 4 $folderItem.SchemaVersion 'Startup Folder item should use schema version four.'
     Assert-Equal 'StartupFolder' $folderItem.Source 'Startup Folder source should be preserved.'
     Assert-Equal 'Shortcut' $folderItem.StartupEntryType 'A .lnk file should be a shortcut entry.'
     Assert-Equal $folderTestExecutable $folderItem.ExecutablePath 'Shortcut target should be resolved.'
@@ -199,7 +199,7 @@ $execTask = [pscustomobject]@{
     )
 }
 $taskItem = ConvertTo-ScheduledTaskStartupItem -Task $execTask
-Assert-Equal 3 $taskItem.SchemaVersion 'Scheduled Task item should use schema version three.'
+Assert-Equal 4 $taskItem.SchemaVersion 'Scheduled Task item should use schema version four.'
 Assert-Equal 'ScheduledTask' $taskItem.Source 'Scheduled Task source should be preserved.'
 Assert-Equal 'Resolved' $taskItem.CommandParseStatus 'A single Exec action should be resolved.'
 Assert-Equal 'C:\Program Files\Example\example.exe' $taskItem.ExecutablePath 'Exec quotes should be removed.'

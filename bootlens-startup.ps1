@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('All', 'RegistryRun', 'StartupFolder', 'ScheduledTask')]
+    [ValidateSet('All', 'RegistryRun', 'StartupFolder', 'ScheduledTask', 'WindowsService')]
     [string]$Source = 'All',
 
     [switch]$AsJson,
@@ -17,6 +17,7 @@ $items = @(switch ($Source) {
     'RegistryRun' { @(Get-RegistryRunStartupItem) }
     'StartupFolder' { @(Get-StartupFolderStartupItem) }
     'ScheduledTask' { @(Get-ScheduledTaskStartupItem) }
+    'WindowsService' { @(Get-WindowsServiceStartupItem) }
     default { @(Get-BootLensStartupItem) }
 })
 
@@ -27,8 +28,8 @@ if ($AsJson) {
 
 Write-Output 'BootLens Startup Items'
 Write-Output ''
-Write-Output ('Configured logon items: {0}' -f $items.Count)
-Write-Output 'Enabled state: documented task state where available; otherwise Unknown'
+Write-Output ('Configured startup items: {0}' -f $items.Count)
+Write-Output 'Startup state: based on source configuration; unavailable values remain Unknown'
 
 foreach ($sourceGroup in @($items | Group-Object Source | Sort-Object Name)) {
     Write-Output ('  {0}: {1}' -f $sourceGroup.Name, $sourceGroup.Count)
@@ -53,6 +54,7 @@ if ($ShowCommand) {
                     'RegistryRun' { $_.CommandLineRaw }
                     'StartupFolder' { $_.StartupEntryPath }
                     'ScheduledTask' { '{0}{1}' -f $_.TaskPath, $_.TaskName }
+                    'WindowsService' { $_.CommandLineRaw }
                 }
             } } |
         Format-Table -Wrap -AutoSize
@@ -71,6 +73,13 @@ else {
                     'Unknown'
                 }
             } },
-            EnabledState |
+            @{ Name = 'StartupState'; Expression = {
+                if ($_.Source -eq 'WindowsService') {
+                    if ($_.ServiceDelayedAutoStart) { 'Auto (Delayed)' } else { 'Auto' }
+                }
+                else {
+                    $_.EnabledState
+                }
+            } } |
         Format-Table -AutoSize
 }

@@ -1,17 +1,18 @@
-# StartupItem v3 数据契约
+# StartupItem v4 数据契约
 
-状态：Phase 2 Registry Run、Startup Folder 与 Scheduled Tasks 数据验证已完成，可用于统一启动项发现。
+状态：Phase 2 Registry Run、Startup Folder、Scheduled Tasks 与自动启动 Windows Services 数据验证已完成，可用于统一启动项发现。
 
 ## 1. 定义
 
 一个 `StartupItem` 表示 Windows 中一条可追溯来源的自动启动配置。
 
-v3 支持三种来源：
+v4 支持四种来源：
 
 ```text
 Registry Run
 Startup Folder
 Scheduled Tasks
+Windows Services
 ```
 
 注册表 `Run` 的触发语义是：
@@ -20,7 +21,7 @@ Scheduled Tasks
 
 它不表示该程序参与内核初始化，也不保证程序在桌面出现前执行。Windows 可能延迟执行，多个 `Run` 项之间也没有确定顺序。
 
-## 2. v3 范围
+## 2. v4 范围
 
 当前实现接受：
 
@@ -37,13 +38,14 @@ direct files
 Scheduled Tasks with a user-logon trigger
 Exec actions
 COM Handler actions
+SCM-enumerated Windows Services with Auto start mode
+Delayed automatic start metadata
 ```
 
 当前暂不包含：
 
 ```text
 RunOnce
-Windows Services
 UWP Startup Tasks
 Shell Extensions
 ```
@@ -54,13 +56,13 @@ Shell Extensions
 
 | 字段 | 类型 | 必需 | 语义 |
 |---|---|---:|---|
-| `SchemaVersion` | Integer | 是 | 数据契约版本，当前固定为 `3` |
+| `SchemaVersion` | Integer | 是 | 数据契约版本，当前固定为 `4` |
 | `Name` | String | 是 | 用于展示的启动项名称 |
-| `Source` | Enum | 是 | `RegistryRun`、`StartupFolder` 或 `ScheduledTask` |
-| `Trigger` | Enum | 是 | 当前固定为 `UserLogon` |
+| `Source` | Enum | 是 | `RegistryRun`、`StartupFolder`、`ScheduledTask` 或 `WindowsService` |
+| `Trigger` | Enum | 是 | `UserLogon` 或 `SystemStartup` |
 | `Scope` | Enum | 是 | `CurrentUser` 或 `LocalMachine` |
-| `CommandLineRaw` | String | 条件 | Registry Run 保存的原始命令行；Startup Folder 不伪造该字段 |
-| `CommandLineExpanded` | String | 否 | 对 Registry `REG_EXPAND_SZ` 安全展开环境变量后的命令行 |
+| `CommandLineRaw` | String | 条件 | Registry Run 原值或服务 `ImagePath` 原值；其他来源不伪造该字段 |
+| `CommandLineExpanded` | String | 否 | 对 Registry `REG_EXPAND_SZ` 或服务 `ImagePath` 的环境变量安全展开 |
 | `ExecutablePath` | String | 否 | 仅在能够可靠解析时填写的可执行文件路径 |
 | `Arguments` | String | 否 | 仅在能够与可执行文件可靠分离时填写的参数 |
 | `CommandParseStatus` | Enum | 是 | `Resolved`、`Unresolved`、`NotApplicable` 或 `MultipleTargets` |
@@ -92,6 +94,12 @@ Shell Extensions
 | `TaskLogonAudience` | Enum | 条件 | `AnyUser`、`SpecificUser` 或 `Mixed` |
 | `TaskLogonTriggers` | Array | 条件 | 全部登录触发器的 Enabled、UserId 与 Delay |
 | `TaskActions` | Array | 条件 | 全部动作的类型及来源字段，不丢弃 COM Handler 信息 |
+| `ServiceName` | String | 条件 | SCM 中的服务键名 |
+| `ServiceStartMode` | Enum | 条件 | 当前纳入项固定为 `Auto` |
+| `ServiceDelayedAutoStart` | Boolean | 条件 | 是否配置为延迟自动启动 |
+| `ServiceState` | String | 条件 | 扫描时 SCM 报告的状态，例如 `Running` 或 `Stopped` |
+| `ServiceStartName` | String | 否 | 服务配置的运行账户；缺失时为空 |
+| `ServiceType` | Integer | 条件 | 服务注册的原始类型位字段 |
 | `SourceIdentity` | String | 是 | 用于标识来源记录的稳定复合键，不等同于程序身份 |
 
 所有 Provider 输出相同的属性集合。不适用于当前 Source 的来源专属字段使用空值，不用空字符串或伪造值填充。
@@ -104,7 +112,7 @@ Unknown
 
 ## 4. 命令行语义
 
-对于 Registry Run，`CommandLineRaw` 是事实来源，必须始终保留。
+对于 Registry Run，`CommandLineRaw` 是事实来源，必须始终保留。Windows Services 的原始 `ImagePath` 也保存在该字段中。
 
 本机样本中同时存在：
 
@@ -119,8 +127,8 @@ D:\NDM\Neat Download Manager\NeatDM.exe -autostart
 
 第一版解析规则：
 
-1. 原始命令始终写入 `CommandLineRaw`；
-2. `REG_EXPAND_SZ` 先保留原值，再生成 `CommandLineExpanded`；
+1. Registry Run 原始命令或 Windows Service 原始 `ImagePath` 写入 `CommandLineRaw`；
+2. `REG_EXPAND_SZ` 与服务可展开的 `ImagePath` 先保留原值，再生成 `CommandLineExpanded`；
 3. 带引号的可执行文件路径可以按引号边界解析；
 4. 未加引号的路径只有在边界可以可靠确认时才解析；
 5. 无法可靠确认时，`ExecutablePath` 和 `Arguments` 为空；
@@ -147,6 +155,16 @@ D:\NDM\Neat Download Manager\NeatDM.exe -autostart
 7. Delay 保留 Task Scheduler 的 ISO 8601 原值，例如 `PT10M`；
 8. 扫描过程只读，绝不运行任务或动作。
 
+对于 Windows Services：
+
+1. 只纳入服务控制管理器（SCM）当前枚举且 Start Mode 为 `Auto` 的服务；
+2. `Manual` 服务可能由服务触发器按需启动，不作为系统启动自动服务计数；
+3. `Boot` / `System` 驱动服务与普通 Windows Services 分开处理；
+4. `DelayedAutoStart` 只在 `Auto` 模式下解释，并单独保留布尔值；
+5. 原始 `ImagePath` 保存在 `CommandLineRaw`，环境变量展开结果保存在 `CommandLineExpanded`；
+6. 当前服务状态是扫描时快照，不代表该服务每次启动都会成功运行；
+7. 不调用 StartService、StopService 或 ChangeStartMode 等修改/控制操作。
+
 ## 5. 启用状态
 
 注册表 `Run` 值存在，只能证明该命令已经注册为登录启动项。
@@ -165,7 +183,7 @@ Windows 当前一定会执行它
 Explorer\StartupApproved\Run
 ```
 
-其中保存了任务管理器使用的二进制状态，但目前没有找到微软公开、稳定的数据格式说明。BootLens v3 不根据非公开字节值猜测启用状态。
+其中保存了任务管理器使用的二进制状态，但目前没有找到微软公开、稳定的数据格式说明。BootLens 不根据非公开字节值猜测启用状态。
 
 因此当前 Registry Run 与 Startup Folder Provider 均使用：
 
@@ -175,7 +193,7 @@ EnabledState = Unknown
 
 后续只有在完成受控实验并确认兼容边界后，才能将其升级为 `Enabled` 或 `Disabled`。
 
-Scheduled Tasks 提供公开的 Task Settings 与 Trigger Enabled 字段。v3 采用：
+Scheduled Tasks 提供公开的 Task Settings 与 Trigger Enabled 字段。v4 采用：
 
 ```text
 任务禁用，或没有启用的登录触发器 = Disabled
@@ -184,6 +202,8 @@ Scheduled Tasks 提供公开的 Task Settings 与 Trigger Enabled 字段。v3 �
 ```
 
 这只描述任务配置状态，不表示任务本次登录已经运行。
+
+自动启动服务依据 SCM 的 `Start=Auto` 纳入，`EnabledState` 为 `Enabled`。延迟启动仍属于自动启动，使用 `ServiceDelayedAutoStart=true` 单独标记。
 
 ## 6. 32 位与 64 位注册表视图
 
@@ -204,7 +224,7 @@ Scheduled Tasks 提供公开的 Task Settings 与 Trigger Enabled 字段。v3 �
 
 一条注册表值必须同时满足：
 
-1. 位于 v3 支持的 `Run` 键；
+1. 位于 v4 支持的 `Run` 键；
 2. 值名称非空；
 3. 值类型为 `REG_SZ` 或 `REG_EXPAND_SZ`；
 4. 原始命令行非空；
@@ -233,6 +253,16 @@ Scheduled Tasks 提供公开的 Task Settings 与 Trigger Enabled 字段。v3 �
 
 动作不是 Exec 或动作数量不为一时，仍保留任务，只是不生成猜测性的公共可执行文件字段。
 
+### 7.4 Windows Services
+
+当前纳入自动启动服务必须满足：
+
+1. SCM 能枚举到该服务；
+2. 对应服务注册项的 `Start` 为 `2`（Auto）；
+3. 来源身份可以由服务键名稳定构造。
+
+Start 为 Manual 的服务可能配置了事件触发器，但不会在无关触发事件时自动启动，因此 v4 不把它们计为系统启动服务。Boot/System 驱动服务在单独的数据模型中处理，不混进普通服务列表。
+
 不满足条件时：
 
 ```text
@@ -250,6 +280,7 @@ Scheduled Tasks 提供公开的 Task Settings 与 Trigger Enabled 字段。v3 �
 RegistryRun|<Hive>|<View>|<KeyPath>|<EscapedValueName>
 StartupFolder|<Scope>|<EscapedEntryPath>
 ScheduledTask|<EscapedTaskPath>|<EscapedTaskName>
+WindowsService|<EscapedServiceName>
 ```
 
 `RegistryValueName` 在复合键中使用 URI 转义，避免名称本身含有分隔符时产生碰撞。
@@ -260,6 +291,7 @@ ScheduledTask|<EscapedTaskPath>|<EscapedTaskName>
 RegistryRun|CurrentUser|Shared|Software\Microsoft\Windows\CurrentVersion\Run|Steam
 StartupFolder|LocalMachine|C%3A%5CProgramData%5CMicrosoft%5CWindows%5CStart%20Menu%5CPrograms%5CStartup%5CTailscale.lnk
 ScheduledTask|%5CMicrosoft%5COffice%5C|Office%20Startup%20Maintenance
+WindowsService|BITS
 ```
 
 `SourceIdentity` 只表示同一个配置来源，不表示两个名称不同的记录一定属于不同程序。
@@ -272,7 +304,7 @@ ScheduledTask|%5CMicrosoft%5COffice%5C|Office%20Startup%20Maintenance
 
 ```json
 {
-  "SchemaVersion": 3,
+  "SchemaVersion": 4,
   "Name": "Steam",
   "Source": "RegistryRun",
   "Trigger": "UserLogon",
@@ -307,7 +339,7 @@ Startup Folder 示例：
 
 ```json
 {
-  "SchemaVersion": 3,
+  "SchemaVersion": 4,
   "Name": "Tailscale",
   "Source": "StartupFolder",
   "Trigger": "UserLogon",
@@ -340,7 +372,7 @@ Scheduled Task 示例：
 
 ```json
 {
-  "SchemaVersion": 3,
+  "SchemaVersion": 4,
   "Name": "Example Logon Task",
   "Source": "ScheduledTask",
   "Trigger": "UserLogon",
@@ -370,7 +402,33 @@ Scheduled Task 示例：
 }
 ```
 
-## 10. 不进入 v3 的字段
+Windows Service 示例：
+
+```json
+{
+  "SchemaVersion": 4,
+  "Name": "Background Intelligent Transfer Service",
+  "Source": "WindowsService",
+  "Trigger": "SystemStartup",
+  "Scope": "LocalMachine",
+  "CommandLineRaw": "%SystemRoot%\\System32\\svchost.exe -k netsvcs -p",
+  "CommandLineExpanded": "C:\\Windows\\System32\\svchost.exe -k netsvcs -p",
+  "ExecutablePath": "C:\\Windows\\System32\\svchost.exe",
+  "Arguments": "-k netsvcs -p",
+  "CommandParseStatus": "Resolved",
+  "ExecutableExists": true,
+  "EnabledState": "Enabled",
+  "ServiceName": "BITS",
+  "ServiceStartMode": "Auto",
+  "ServiceDelayedAutoStart": true,
+  "ServiceState": "Running",
+  "ServiceStartName": "LocalSystem",
+  "ServiceType": 32,
+  "SourceIdentity": "WindowsService|BITS"
+}
+```
+
+## 10. 不进入 v4 的字段
 
 ### Startup Impact
 
@@ -398,7 +456,10 @@ Local Machine / 64-bit     2 条
 Local Machine / 32-bit     1 条
 Current User Startup       1 条有效快捷方式
 Common Startup             1 条有效快捷方式
-统一结果                    20 条
+登录触发计划任务            45 条
+自动启动 Windows Services  84 条
+  其中延迟自动启动          14 条
+统一结果                   149 条
 ```
 
 样本确认：
@@ -430,6 +491,18 @@ SpecificUser           4 条
 
 普通权限下本机拒绝完整枚举计划任务。Provider 会返回空的该来源并发出权限提示，不影响 Registry Run 与 Startup Folder 结果。
 
+Windows Services 使用普通权限可访问的 Service Control Manager 与本机服务注册配置完成只读验证：
+
+```text
+SCM 枚举服务对象           303 条
+Auto                       84 条
+  其中 DelayedAutoStart    14 条
+Manual                    210 条
+Disabled                    9 条
+```
+
+抽查的 `WbioSrvc`、`CDPSvc` 与 `DoSvc` 存在服务触发器；它们按事件启动，不计入自动系统启动服务。注册表中另有未作为 SCM 服务对象枚举的驱动和每用户服务模板，v4 不把这些条目重复加入普通服务清单。Boot/System 驱动服务留待独立建模。
+
 ## 12. 参考资料
 
 - [Run and RunOnce Registry Keys](https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys)
@@ -441,8 +514,18 @@ SpecificUser           4 条
 - [Task Scheduler actions](https://learn.microsoft.com/en-us/windows/win32/taskschd/task-actions)
 - [Logon trigger Delay element](https://learn.microsoft.com/en-us/windows/win32/taskschd/taskschedulerschema-delay-logontriggertype-element)
 - [ScheduledTasks PowerShell module](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/)
+- [Win32_Service class](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-service)
+- [Service Trigger Events](https://learn.microsoft.com/en-us/windows/win32/services/service-trigger-events)
+- [Delayed auto-start service configuration](https://learn.microsoft.com/en-us/windows/win32/api/winsvc/ns-winsvc-service_delayed_auto_start_info)
 
 ## 13. 版本变化
+
+### v4
+
+- 增加 `WindowsService` Source，只收录 SCM 枚举的 Auto 服务；
+- 保留服务启动命令、运行账户、当前状态、服务类型及延迟启动标记；
+- 增加 `SystemStartup` Trigger；
+- SchemaVersion 从 `3` 更新为 `4`。
 
 ### v3
 

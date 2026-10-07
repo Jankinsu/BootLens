@@ -37,6 +37,7 @@ $controlNames = @(
     'RegistryStartupCountValue'
     'FolderStartupCountValue'
     'TaskStartupCountValue'
+    'ServiceStartupCountValue'
     'UnresolvedStartupCountValue'
     'StartupItemCountText'
     'StartupSearchTextBox'
@@ -189,14 +190,16 @@ function Apply-StartupItemsFilter {
                 continue
             }
 
-            $searchableText = '{0} {1} {2} {3} {4} {5} {6}' -f `
+            $searchableText = '{0} {1} {2} {3} {4} {5} {6} {7} {8}' -f `
                 $row.Name,
+                $row.ServiceName,
                 $row.Source,
                 $row.Scope,
                 $row.Executable,
                 $row.Publisher,
                 $row.Resolution,
-                $row.Enabled
+                $row.Enabled,
+                $row.ServiceStartName
 
             if (-not [string]::IsNullOrWhiteSpace($query) -and
                 $searchableText.IndexOf($query, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
@@ -208,7 +211,7 @@ function Apply-StartupItemsFilter {
     )
 
     $controls.StartupItemsDataGrid.ItemsSource = $visibleRows
-    $controls.StartupItemCountText.Text = '{0} of {1} configured logon items' -f `
+    $controls.StartupItemCountText.Text = '{0} of {1} configured startup items' -f `
         $visibleRows.Count,
         $script:StartupItemRows.Count
 }
@@ -218,21 +221,26 @@ function Update-StartupItemsView {
     $registryCount = @($items | Where-Object Source -eq 'RegistryRun').Count
     $folderCount = @($items | Where-Object Source -eq 'StartupFolder').Count
     $taskCount = @($items | Where-Object Source -eq 'ScheduledTask').Count
+    $serviceCount = @($items | Where-Object Source -eq 'WindowsService').Count
     $unresolvedCount = @($items | Where-Object CommandParseStatus -eq 'Unresolved').Count
 
     $controls.StartupTotalValue.Text = [string]$items.Count
     $controls.RegistryStartupCountValue.Text = [string]$registryCount
     $controls.FolderStartupCountValue.Text = [string]$folderCount
     $controls.TaskStartupCountValue.Text = [string]$taskCount
+    $controls.ServiceStartupCountValue.Text = [string]$serviceCount
     $controls.UnresolvedStartupCountValue.Text = [string]$unresolvedCount
     $script:StartupItemRows = @(
         foreach ($item in $items) {
             [pscustomobject]@{
                 Name       = $item.Name
+                ServiceName = $item.ServiceName
+                ServiceStartName = $item.ServiceStartName
                 Source     = switch ($item.Source) {
                     'RegistryRun' { 'Registry Run' }
                     'StartupFolder' { 'Startup Folder' }
                     'ScheduledTask' { 'Scheduled Task' }
+                    'WindowsService' { 'Windows Service' }
                 }
                 Scope      = if ($item.Source -eq 'ScheduledTask') {
                     switch ($item.TaskLogonAudience) {
@@ -261,7 +269,12 @@ function Update-StartupItemsView {
                     $item.Publisher
                 }
                 Resolution = $item.CommandParseStatus
-                Enabled    = $item.EnabledState
+                Enabled    = if ($item.Source -eq 'WindowsService') {
+                    if ($item.ServiceDelayedAutoStart) { 'Auto (Delayed)' } else { 'Auto' }
+                }
+                else {
+                    $item.EnabledState
+                }
             }
         }
     )
