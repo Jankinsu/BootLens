@@ -1,0 +1,287 @@
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="BootLens"
+    Width="1040"
+    Height="720"
+    MinWidth="860"
+    MinHeight="600"
+    WindowStartupLocation="CenterScreen"
+    Background="#F3F4F6"
+    FontFamily="Segoe UI">
+    <Window.Resources>
+        <SolidColorBrush x:Key="PrimaryBrush" Color="#2563EB" />
+        <SolidColorBrush x:Key="HeadingBrush" Color="#111827" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#6B7280" />
+
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#E5E7EB" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="20" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#2563EB" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="18,9" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+
+        <Style TargetType="ProgressBar">
+            <Setter Property="Height" Value="8" />
+            <Setter Property="Maximum" Value="100" />
+            <Setter Property="Foreground" Value="#2563EB" />
+            <Setter Property="Background" Value="#E5E7EB" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#111827" Padding="28,22">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <TextBlock
+                        Foreground="White"
+                        FontSize="26"
+                        FontWeight="Bold"
+                        Text="BootLens" />
+                    <TextBlock
+                        Margin="0,5,0,0"
+                        Foreground="#9CA3AF"
+                        FontSize="13"
+                        Text="Windows 完整启动历史 · Windows 原生测量数据" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Center"
+                        Foreground="#D1D5DB"
+                        Text="显示" />
+                    <ComboBox
+                        x:Name="CountComboBox"
+                        Width="70"
+                        Margin="0,0,12,0"
+                        Padding="6"
+                        SelectedIndex="1">
+                        <ComboBoxItem Content="5" />
+                        <ComboBoxItem Content="10" />
+                        <ComboBoxItem Content="20" />
+                        <ComboBoxItem Content="50" />
+                    </ComboBox>
+                    <Button x:Name="RefreshButton" Content="刷新" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border
+            x:Name="ErrorBorder"
+            Grid.Row="1"
+            Margin="24,18,24,0"
+            Padding="14,10"
+            Background="#FEF2F2"
+            BorderBrush="#FECACA"
+            BorderThickness="1"
+            CornerRadius="8"
+            Visibility="Collapsed">
+            <TextBlock
+                x:Name="ErrorTextBlock"
+                Foreground="#991B1B"
+                TextWrapping="Wrap" />
+        </Border>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24,20,12,24">
+                <UniformGrid Columns="4" Margin="0,0,0,20">
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Foreground="{StaticResource MutedBrush}" Text="上次完整启动" />
+                            <TextBlock
+                                x:Name="LastBootValue"
+                                Margin="0,8,0,0"
+                                Foreground="{StaticResource HeadingBrush}"
+                                FontSize="28"
+                                FontWeight="Bold"
+                                Text="--" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Foreground="{StaticResource MutedBrush}" Text="平均" />
+                            <TextBlock
+                                x:Name="AverageValue"
+                                Margin="0,8,0,0"
+                                Foreground="{StaticResource HeadingBrush}"
+                                FontSize="28"
+                                FontWeight="Bold"
+                                Text="--" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Foreground="{StaticResource MutedBrush}" Text="最快" />
+                            <TextBlock
+                                x:Name="FastestValue"
+                                Margin="0,8,0,0"
+                                Foreground="#047857"
+                                FontSize="28"
+                                FontWeight="Bold"
+                                Text="--" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Foreground="{StaticResource MutedBrush}" Text="最慢" />
+                            <TextBlock
+                                x:Name="SlowestValue"
+                                Margin="0,8,0,0"
+                                Foreground="#B45309"
+                                FontSize="28"
+                                FontWeight="Bold"
+                                Text="--" />
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+
+                <Border Margin="0,0,12,20" Style="{StaticResource CardStyle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="32" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Margin="0,0,0,18">
+                            <TextBlock
+                                Foreground="{StaticResource HeadingBrush}"
+                                FontSize="17"
+                                FontWeight="SemiBold"
+                                Text="最近一次启动构成" />
+                            <TextBlock
+                                x:Name="LatestBootTimeText"
+                                Margin="0,5,0,0"
+                                Foreground="{StaticResource MutedBrush}"
+                                Text="--" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="0">
+                            <DockPanel Margin="0,0,0,8">
+                                <TextBlock DockPanel.Dock="Left" Foreground="{StaticResource MutedBrush}" Text="桌面出现前 · Main Path" />
+                                <TextBlock
+                                    x:Name="MainPathValue"
+                                    HorizontalAlignment="Right"
+                                    Foreground="{StaticResource HeadingBrush}"
+                                    FontWeight="SemiBold"
+                                    Text="--" />
+                            </DockPanel>
+                            <ProgressBar x:Name="MainPathProgress" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="2">
+                            <DockPanel Margin="0,0,0,8">
+                                <TextBlock DockPanel.Dock="Left" Foreground="{StaticResource MutedBrush}" Text="桌面出现后 · Post Boot" />
+                                <TextBlock
+                                    x:Name="PostBootValue"
+                                    HorizontalAlignment="Right"
+                                    Foreground="{StaticResource HeadingBrush}"
+                                    FontWeight="SemiBold"
+                                    Text="--" />
+                            </DockPanel>
+                            <ProgressBar x:Name="PostBootProgress" Foreground="#7C3AED" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Margin="0,0,12,0" Style="{StaticResource CardStyle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                Foreground="{StaticResource HeadingBrush}"
+                                FontSize="17"
+                                FontWeight="SemiBold"
+                                Text="最近完整启动" />
+                            <TextBlock
+                                x:Name="SampleCountText"
+                                Grid.Column="1"
+                                Foreground="{StaticResource MutedBrush}"
+                                Text="--" />
+                        </Grid>
+
+                        <DataGrid
+                            x:Name="HistoryDataGrid"
+                            Grid.Row="1"
+                            AutoGenerateColumns="False"
+                            BorderThickness="0"
+                            CanUserAddRows="False"
+                            CanUserDeleteRows="False"
+                            CanUserReorderColumns="False"
+                            CanUserResizeRows="False"
+                            HeadersVisibility="Column"
+                            IsReadOnly="True"
+                            RowHeaderWidth="0"
+                            SelectionMode="Single"
+                            GridLinesVisibility="Horizontal"
+                            HorizontalGridLinesBrush="#E5E7EB">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Width="2*" Binding="{Binding Started}" Header="启动时间" />
+                                <DataGridTextColumn Width="*" Binding="{Binding Total}" Header="总耗时" />
+                                <DataGridTextColumn Width="*" Binding="{Binding MainPath}" Header="Main Path" />
+                                <DataGridTextColumn Width="*" Binding="{Binding PostBoot}" Header="Post Boot" />
+                                <DataGridTextColumn Width="*" Binding="{Binding Apps}" Header="启动应用" />
+                                <DataGridTextColumn Width="1.4*" Binding="{Binding Status}" Header="Windows 判断" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="3" Padding="24,11" Background="#E5E7EB">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    Foreground="{StaticResource MutedBrush}"
+                    FontSize="12"
+                    Text="数据来源：Windows Diagnostics-Performance Event ID 100 · 仅统计已确认完整启动" />
+                <TextBlock
+                    x:Name="FooterStatusText"
+                    Grid.Column="1"
+                    Foreground="{StaticResource MutedBrush}"
+                    FontSize="12"
+                    Text="等待读取" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -1182,7 +1182,8 @@ README 应始终反映：
 
 ```text
 Phase 0 已完成
-准备进入 Phase 1
+Phase 1 启动历史 CLI 初版已完成
+Phase 1 轻量 GUI 原型已实现
 ```
 
 Phase 0 已经完成：
@@ -1198,6 +1199,41 @@ Phase 0 已经完成：
 .\scripts\inspect-boot-events.ps1
 .\scripts\inspect-kernel-boot-types.ps1
 ```
+
+当前已有 Phase 1 CLI 原型：
+
+```powershell
+.\bootlens.ps1
+.\bootlens.ps1 -Count 5
+.\bootlens.ps1 -Count 10 -AsJson
+```
+
+当前已有 Phase 1 GUI 原型：
+
+```powershell
+.\bootlens-gui.ps1
+```
+
+GUI 原型采用 Windows PowerShell 5.1 + WPF：
+
+- 复用 CLI 已验证的数据采集与统计模块；
+- 不引入额外运行时或第三方 UI 框架；
+- 不创建后台进程、Service 或开机启动项；
+- 关闭窗口后完全退出；
+- 当前用于验证界面信息结构，不代表最终发布技术栈。
+
+CLI 当前提供：
+
+- 最近一次完整启动耗时；
+- Main Path 与 Post Boot 分段耗时；
+- 最近 N 次完整启动；
+- 平均、最快和最慢启动耗时；
+- Windows 原生性能退化标记；
+- `BootRecord` v1 完整启动筛选。
+
+2026-10-07 已使用本机真实事件日志完成验证：成功输出最近 10 次完整启动，并正确计算最近一次、平均、最快和最慢启动耗时。
+
+在当前机器上读取 Diagnostics-Performance 日志需要管理员权限。CLI 不会自动提升权限；请按需在管理员 PowerShell 中运行。
 
 当前验证记录见：
 
@@ -1216,7 +1252,7 @@ shutdown /s /t 0 后开机          = 完整启动
 
 当前任务：
 
-> 按 `BootRecord` v1 数据契约实现 Phase 1 启动历史 CLI。
+> 验证 Phase 1 GUI 原型的布局和交互，再决定正式桌面版本的技术栈与打包方式。
 
 ---
 
