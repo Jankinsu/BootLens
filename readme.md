@@ -1185,6 +1185,7 @@ Phase 0 已完成
 Phase 1 启动历史 CLI 初版已完成
 Phase 1 轻量 GUI 原型已实现
 Phase 2 Registry Run 与 Startup Folder 启动项发现已实现
+Phase 2 启动项 GUI 页面已实现
 ```
 
 Phase 0 已经完成：
@@ -1222,6 +1223,11 @@ GUI 原型采用 Windows PowerShell 5.1 + WPF：
 - 不创建后台进程、Service 或开机启动项；
 - 关闭窗口后完全退出；
 - 当前用于验证界面信息结构，不代表最终发布技术栈。
+
+GUI 当前包含两个只读页面：
+
+- 启动历史：完整启动耗时、阶段构成与最近记录；
+- 启动项：Registry Run 与 Startup Folder 来源、作用域、目标路径、Publisher 和解析状态。
 
 当前已有 Phase 2 Registry Run CLI：
 
@@ -1282,7 +1288,7 @@ shutdown /s /t 0 后开机          = 完整启动
 
 当前任务：
 
-> 将统一 `StartupItem` v2 数据接入 GUI 的第二个页面。
+> 验证 GUI 启动项页面的信息密度和可读性，再继续增加下一种启动项来源。
 
 ---
 

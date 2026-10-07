@@ -33,6 +33,12 @@ $controlNames = @(
     'PostBootProgress'
     'SampleCountText'
     'HistoryDataGrid'
+    'StartupTotalValue'
+    'RegistryStartupCountValue'
+    'FolderStartupCountValue'
+    'UnresolvedStartupCountValue'
+    'StartupItemCountText'
+    'StartupItemsDataGrid'
     'FooterStatusText'
 )
 
@@ -54,6 +60,7 @@ if ($ValidateOnly) {
 }
 
 Import-Module (Join-Path $PSScriptRoot 'scripts\BootLens.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'scripts\BootLens.Startup.psm1') -Force
 
 function Format-Duration {
     param(
@@ -102,90 +109,149 @@ function Show-ErrorMessage {
 
     $controls.ErrorTextBlock.Text = $Message
     $controls.ErrorBorder.Visibility = [Windows.Visibility]::Visible
-    $controls.FooterStatusText.Text = 'Read failed'
+}
+
+function Update-BootHistoryView {
+    $selectedCount = [int]$controls.CountComboBox.SelectedItem.Content
+    $scanEvents = [Math]::Max(100, $selectedCount * 5)
+    $report = Get-BootLensReport -Count $selectedCount -ScanEvents $scanEvents
+
+    if ($null -eq $report.Summary -or $report.Records.Count -eq 0) {
+        throw 'No confirmed full boot records were found.'
+    }
+
+    $summary = $report.Summary
+    $latest = $report.Records[0]
+    $mainPercent = if ($latest.BootDurationMs -gt 0) {
+        100.0 * $latest.MainPathBootDurationMs / $latest.BootDurationMs
+    }
+    else {
+        0
+    }
+    $postPercent = if ($latest.BootDurationMs -gt 0) {
+        100.0 * $latest.PostBootDurationMs / $latest.BootDurationMs
+    }
+    else {
+        0
+    }
+
+    $controls.LastBootValue.Text = Format-Duration $summary.LastBootDurationMs
+    $controls.AverageValue.Text = Format-Duration $summary.AverageBootDurationMs
+    $controls.FastestValue.Text = Format-Duration $summary.FastestBootDurationMs
+    $controls.SlowestValue.Text = Format-Duration $summary.SlowestBootDurationMs
+    $controls.LatestBootTimeText.Text = $latest.BootStartTimeUtc.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss')
+    $controls.MainPathValue.Text = '{0} / {1:F0}%' -f
+        (Format-Duration $latest.MainPathBootDurationMs),
+        $mainPercent
+    $controls.PostBootValue.Text = '{0} / {1:F0}%' -f
+        (Format-Duration $latest.PostBootDurationMs),
+        $postPercent
+    $controls.MainPathProgress.Value = $mainPercent
+    $controls.PostBootProgress.Value = $postPercent
+    $controls.SampleCountText.Text = '{0} confirmed full boots' -f $summary.SampleCount
+
+    $history = @(
+        foreach ($record in $report.Records) {
+            $status = if ($record.IsWindowsDegradation -eq $true) {
+                'Degraded'
+            }
+            elseif ($record.IsWindowsDegradation -eq $false) {
+                'Normal'
+            }
+            else {
+                'Unknown'
+            }
+
+            [pscustomobject]@{
+                Started  = $record.BootStartTimeUtc.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss')
+                Total    = Format-Duration $record.BootDurationMs
+                MainPath = Format-Duration $record.MainPathBootDurationMs
+                PostBoot = Format-Duration $record.PostBootDurationMs
+                Apps     = $record.StartupAppCount
+                Status   = $status
+            }
+        }
+    )
+
+    $controls.HistoryDataGrid.ItemsSource = $history
+}
+
+function Update-StartupItemsView {
+    $items = @(Get-BootLensStartupItem)
+    $registryCount = @($items | Where-Object Source -eq 'RegistryRun').Count
+    $folderCount = @($items | Where-Object Source -eq 'StartupFolder').Count
+    $unresolvedCount = @($items | Where-Object CommandParseStatus -eq 'Unresolved').Count
+
+    $controls.StartupTotalValue.Text = [string]$items.Count
+    $controls.RegistryStartupCountValue.Text = [string]$registryCount
+    $controls.FolderStartupCountValue.Text = [string]$folderCount
+    $controls.UnresolvedStartupCountValue.Text = [string]$unresolvedCount
+    $controls.StartupItemCountText.Text = '{0} configured logon items' -f $items.Count
+
+    $rows = @(
+        foreach ($item in $items) {
+            [pscustomobject]@{
+                Name       = $item.Name
+                Source     = if ($item.Source -eq 'RegistryRun') { 'Registry Run' } else { 'Startup Folder' }
+                Scope      = if ($item.Scope -eq 'CurrentUser') { 'Current user' } else { 'All users' }
+                Executable = if ($item.CommandParseStatus -eq 'Resolved') {
+                    $item.ExecutablePath
+                }
+                else {
+                    'Unknown'
+                }
+                Publisher  = if ([string]::IsNullOrWhiteSpace([string]$item.Publisher)) {
+                    'Unknown'
+                }
+                else {
+                    $item.Publisher
+                }
+                Resolution = $item.CommandParseStatus
+                Enabled    = $item.EnabledState
+            }
+        }
+    )
+
+    $controls.StartupItemsDataGrid.ItemsSource = $rows
 }
 
 function Update-BootLensView {
     Set-LoadingState -IsLoading $true
     $controls.ErrorBorder.Visibility = [Windows.Visibility]::Collapsed
-    $controls.FooterStatusText.Text = 'Reading Windows boot events...'
+    $controls.FooterStatusText.Text = 'Reading Windows data...'
+    $errors = New-Object 'System.Collections.Generic.List[string]'
 
     try {
-        $selectedCount = [int]$controls.CountComboBox.SelectedItem.Content
-        $scanEvents = [Math]::Max(100, $selectedCount * 5)
-        $report = Get-BootLensReport -Count $selectedCount -ScanEvents $scanEvents
-
-        if ($null -eq $report.Summary -or $report.Records.Count -eq 0) {
-            throw 'No confirmed full boot records were found.'
+        try {
+            Update-BootHistoryView
         }
+        catch {
+            $message = $_.Exception.Message
 
-        $summary = $report.Summary
-        $latest = $report.Records[0]
-        $mainPercent = if ($latest.BootDurationMs -gt 0) {
-            100.0 * $latest.MainPathBootDurationMs / $latest.BootDurationMs
-        }
-        else {
-            0
-        }
-        $postPercent = if ($latest.BootDurationMs -gt 0) {
-            100.0 * $latest.PostBootDurationMs / $latest.BootDurationMs
-        }
-        else {
-            0
-        }
-
-        $controls.LastBootValue.Text = Format-Duration $summary.LastBootDurationMs
-        $controls.AverageValue.Text = Format-Duration $summary.AverageBootDurationMs
-        $controls.FastestValue.Text = Format-Duration $summary.FastestBootDurationMs
-        $controls.SlowestValue.Text = Format-Duration $summary.SlowestBootDurationMs
-        $controls.LatestBootTimeText.Text = $latest.BootStartTimeUtc.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss')
-        $controls.MainPathValue.Text = '{0} / {1:F0}%' -f
-            (Format-Duration $latest.MainPathBootDurationMs),
-            $mainPercent
-        $controls.PostBootValue.Text = '{0} / {1:F0}%' -f
-            (Format-Duration $latest.PostBootDurationMs),
-            $postPercent
-        $controls.MainPathProgress.Value = $mainPercent
-        $controls.PostBootProgress.Value = $postPercent
-        $controls.SampleCountText.Text = '{0} confirmed full boots' -f $summary.SampleCount
-
-        $history = @(
-            foreach ($record in $report.Records) {
-                $status = if ($record.IsWindowsDegradation -eq $true) {
-                    'Degraded'
-                }
-                elseif ($record.IsWindowsDegradation -eq $false) {
-                    'Normal'
-                }
-                else {
-                    'Unknown'
-                }
-
-                [pscustomobject]@{
-                    Started  = $record.BootStartTimeUtc.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss')
-                    Total    = Format-Duration $record.BootDurationMs
-                    MainPath = Format-Duration $record.MainPathBootDurationMs
-                    PostBoot = Format-Duration $record.PostBootDurationMs
-                    Apps     = $record.StartupAppCount
-                    Status   = $status
-                }
+            if ($message -match 'Administrator|unauthorized|access is denied') {
+                $message = @(
+                    'Administrator access is required to read the boot performance log.'
+                    'Open the PowerShell (AD) profile in Windows Terminal and run BootLens again.'
+                ) -join [Environment]::NewLine
             }
-        )
 
-        $controls.HistoryDataGrid.ItemsSource = $history
-        $controls.FooterStatusText.Text = 'Updated {0:HH:mm:ss}' -f (Get-Date)
-    }
-    catch {
-        $message = $_.Exception.Message
-
-        if ($message -match 'Administrator|unauthorized|access is denied') {
-            $message = @(
-                'Administrator access is required to read the boot performance log.'
-                'Open the PowerShell (AD) profile in Windows Terminal and run BootLens again.'
-            ) -join [Environment]::NewLine
+            $errors.Add($message)
         }
 
-        Show-ErrorMessage -Message $message
+        try {
+            Update-StartupItemsView
+        }
+        catch {
+            $errors.Add("Startup item discovery failed: $($_.Exception.Message)")
+        }
+
+        if ($errors.Count -gt 0) {
+            Show-ErrorMessage -Message ($errors -join ([Environment]::NewLine + [Environment]::NewLine))
+            $controls.FooterStatusText.Text = 'Updated with errors {0:HH:mm:ss}' -f (Get-Date)
+        }
+        else {
+            $controls.FooterStatusText.Text = 'Updated {0:HH:mm:ss}' -f (Get-Date)
+        }
     }
     finally {
         Set-LoadingState -IsLoading $false

@@ -106,8 +106,10 @@
                 TextWrapping="Wrap" />
         </Border>
 
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="24,20,12,24">
+        <TabControl Grid.Row="2" Background="Transparent" BorderThickness="0">
+            <TabItem Header="启动历史">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="24,20,12,24">
                 <UniformGrid Columns="4" Margin="0,0,0,20">
                     <Border Style="{StaticResource CardStyle}">
                         <StackPanel>
@@ -262,8 +264,132 @@
                         </DataGrid>
                     </Grid>
                 </Border>
-            </StackPanel>
-        </ScrollViewer>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="启动项">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="24,20,12,24">
+                        <UniformGrid Columns="4" Margin="0,0,0,20">
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource MutedBrush}" Text="登录启动配置" />
+                                    <TextBlock
+                                        x:Name="StartupTotalValue"
+                                        Margin="0,8,0,0"
+                                        Foreground="{StaticResource HeadingBrush}"
+                                        FontSize="28"
+                                        FontWeight="Bold"
+                                        Text="--" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource MutedBrush}" Text="Registry Run" />
+                                    <TextBlock
+                                        x:Name="RegistryStartupCountValue"
+                                        Margin="0,8,0,0"
+                                        Foreground="#2563EB"
+                                        FontSize="28"
+                                        FontWeight="Bold"
+                                        Text="--" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource MutedBrush}" Text="Startup Folder" />
+                                    <TextBlock
+                                        x:Name="FolderStartupCountValue"
+                                        Margin="0,8,0,0"
+                                        Foreground="#7C3AED"
+                                        FontSize="28"
+                                        FontWeight="Bold"
+                                        Text="--" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource MutedBrush}" Text="未解析目标" />
+                                    <TextBlock
+                                        x:Name="UnresolvedStartupCountValue"
+                                        Margin="0,8,0,0"
+                                        Foreground="#B45309"
+                                        FontSize="28"
+                                        FontWeight="Bold"
+                                        Text="--" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+
+                        <Border
+                            Margin="0,0,12,20"
+                            Padding="16,12"
+                            Background="#EFF6FF"
+                            BorderBrush="#BFDBFE"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                            <TextBlock
+                                Foreground="#1E3A8A"
+                                Text="这里展示配置为随用户登录启动的项目，不表示它们拖慢了多少。启用状态暂不根据未公开数据进行猜测。"
+                                TextWrapping="Wrap" />
+                        </Border>
+
+                        <Border Margin="0,0,12,0" Style="{StaticResource CardStyle}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <Grid Margin="0,0,0,14">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock
+                                        Foreground="{StaticResource HeadingBrush}"
+                                        FontSize="17"
+                                        FontWeight="SemiBold"
+                                        Text="启动项发现" />
+                                    <TextBlock
+                                        x:Name="StartupItemCountText"
+                                        Grid.Column="1"
+                                        Foreground="{StaticResource MutedBrush}"
+                                        Text="--" />
+                                </Grid>
+
+                                <DataGrid
+                                    x:Name="StartupItemsDataGrid"
+                                    Grid.Row="1"
+                                    AutoGenerateColumns="False"
+                                    BorderThickness="0"
+                                    CanUserAddRows="False"
+                                    CanUserDeleteRows="False"
+                                    CanUserReorderColumns="False"
+                                    CanUserResizeRows="False"
+                                    HeadersVisibility="Column"
+                                    IsReadOnly="True"
+                                    RowHeaderWidth="0"
+                                    SelectionMode="Single"
+                                    GridLinesVisibility="Horizontal"
+                                    HorizontalGridLinesBrush="#E5E7EB">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Width="1.8*" Binding="{Binding Name}" Header="名称" />
+                                        <DataGridTextColumn Width="1.1*" Binding="{Binding Source}" Header="来源" />
+                                        <DataGridTextColumn Width="*" Binding="{Binding Scope}" Header="作用域" />
+                                        <DataGridTextColumn Width="2.8*" Binding="{Binding Executable}" Header="可执行文件" />
+                                        <DataGridTextColumn Width="1.4*" Binding="{Binding Publisher}" Header="Publisher" />
+                                        <DataGridTextColumn Width="*" Binding="{Binding Resolution}" Header="解析状态" />
+                                        <DataGridTextColumn Width="*" Binding="{Binding Enabled}" Header="启用状态" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
 
         <Border Grid.Row="3" Padding="24,11" Background="#E5E7EB">
             <Grid>
@@ -274,7 +400,7 @@
                 <TextBlock
                     Foreground="{StaticResource MutedBrush}"
                     FontSize="12"
-                    Text="数据来源：Windows Diagnostics-Performance Event ID 100 · 仅统计已确认完整启动" />
+                    Text="数据来源：Windows Event Log、Registry Run、Startup Folder · 全程只读" />
                 <TextBlock
                     x:Name="FooterStatusText"
                     Grid.Column="1"
