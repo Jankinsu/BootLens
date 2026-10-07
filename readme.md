@@ -1184,6 +1184,7 @@ README 应始终反映：
 Phase 0 已完成
 Phase 1 启动历史 CLI 初版已完成
 Phase 1 轻量 GUI 原型已实现
+Phase 2 Registry Run 启动项发现已实现
 ```
 
 Phase 0 已经完成：
@@ -1222,6 +1223,25 @@ GUI 原型采用 Windows PowerShell 5.1 + WPF：
 - 关闭窗口后完全退出；
 - 当前用于验证界面信息结构，不代表最终发布技术栈。
 
+当前已有 Phase 2 Registry Run CLI：
+
+```powershell
+.\bootlens-startup.ps1
+.\bootlens-startup.ps1 -ShowCommand
+.\bootlens-startup.ps1 -AsJson
+```
+
+Registry Run Provider 当前提供：
+
+- Current User Shared 注册表视图；
+- Local Machine 32/64 位注册表视图；
+- 原始命令行与安全路径解析；
+- 文件存在性与 Publisher 读取；
+- 稳定来源身份；
+- 无法可靠解析时显示 `Unknown`。
+
+2026-10-07 已使用本机真实注册表完成验证：发现 18 条登录启动配置，其中 13 条命令成功解析，5 条保持 `Unresolved`。
+
 CLI 当前提供：
 
 - 最近一次完整启动耗时；
@@ -1240,6 +1260,7 @@ CLI 当前提供：
 ```text
 docs/phase-0-data-validation.md
 docs/boot-record.md
+docs/startup-item.md
 ```
 
 当前已经确认：
@@ -1252,7 +1273,7 @@ shutdown /s /t 0 后开机          = 完整启动
 
 当前任务：
 
-> 验证 Phase 1 GUI 原型的布局和交互，再决定正式桌面版本的技术栈与打包方式。
+> 验证 Startup Folder 的文件与快捷方式语义，建立下一种只读启动项来源。
 
 ---
 
