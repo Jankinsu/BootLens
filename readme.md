@@ -1227,7 +1227,7 @@ GUI 原型采用 Windows PowerShell 5.1 + WPF：
 GUI 当前包含两个只读页面：
 
 - 启动历史：完整启动耗时、阶段构成与最近记录；
-- 启动项：Registry Run、Startup Folder 与 Scheduled Tasks 来源、作用域、目标路径、Publisher、解析状态和启用状态。
+- 启动项：Registry Run、Startup Folder 与 Scheduled Tasks 来源、作用域、目标路径、Publisher、解析状态和启用状态；支持名称/目标搜索及来源筛选。
 
 当前已有 Phase 2 Registry Run CLI：
 
@@ -1297,7 +1297,7 @@ shutdown /s /t 0 后开机          = 完整启动
 
 当前任务：
 
-> 验证加入 Scheduled Tasks 后的 GUI 信息密度和可读性，再继续增加下一种启动项来源。
+> 确认启动项搜索与来源筛选改善了 GUI 信息密度，再继续增加 Windows Services 来源。
 
 ---
 

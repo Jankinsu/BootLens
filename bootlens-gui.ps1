@@ -39,11 +39,14 @@ $controlNames = @(
     'TaskStartupCountValue'
     'UnresolvedStartupCountValue'
     'StartupItemCountText'
+    'StartupSearchTextBox'
+    'StartupSourceFilterComboBox'
     'StartupItemsDataGrid'
     'FooterStatusText'
 )
 
 $controls = @{}
+$script:StartupItemRows = @()
 
 foreach ($name in $controlNames) {
     $control = $window.FindName($name)
@@ -177,6 +180,39 @@ function Update-BootHistoryView {
     $controls.HistoryDataGrid.ItemsSource = $history
 }
 
+function Apply-StartupItemsFilter {
+    $query = $controls.StartupSearchTextBox.Text.Trim()
+    $selectedSource = [string]$controls.StartupSourceFilterComboBox.SelectedItem.Content
+    $visibleRows = @(
+        foreach ($row in $script:StartupItemRows) {
+            if ($selectedSource -ne '全部来源' -and $row.Source -ne $selectedSource) {
+                continue
+            }
+
+            $searchableText = '{0} {1} {2} {3} {4} {5} {6}' -f `
+                $row.Name,
+                $row.Source,
+                $row.Scope,
+                $row.Executable,
+                $row.Publisher,
+                $row.Resolution,
+                $row.Enabled
+
+            if (-not [string]::IsNullOrWhiteSpace($query) -and
+                $searchableText.IndexOf($query, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+                continue
+            }
+
+            $row
+        }
+    )
+
+    $controls.StartupItemsDataGrid.ItemsSource = $visibleRows
+    $controls.StartupItemCountText.Text = '{0} of {1} configured logon items' -f `
+        $visibleRows.Count,
+        $script:StartupItemRows.Count
+}
+
 function Update-StartupItemsView {
     $items = @(Get-BootLensStartupItem)
     $registryCount = @($items | Where-Object Source -eq 'RegistryRun').Count
@@ -189,9 +225,7 @@ function Update-StartupItemsView {
     $controls.FolderStartupCountValue.Text = [string]$folderCount
     $controls.TaskStartupCountValue.Text = [string]$taskCount
     $controls.UnresolvedStartupCountValue.Text = [string]$unresolvedCount
-    $controls.StartupItemCountText.Text = '{0} configured logon items' -f $items.Count
-
-    $rows = @(
+    $script:StartupItemRows = @(
         foreach ($item in $items) {
             [pscustomobject]@{
                 Name       = $item.Name
@@ -232,7 +266,7 @@ function Update-StartupItemsView {
         }
     )
 
-    $controls.StartupItemsDataGrid.ItemsSource = $rows
+    Apply-StartupItemsFilter
 }
 
 function Update-BootLensView {
@@ -280,6 +314,8 @@ function Update-BootLensView {
 
 Set-SelectedCount -Value $Count
 $controls.RefreshButton.Add_Click({ Update-BootLensView })
+$controls.StartupSearchTextBox.Add_TextChanged({ Apply-StartupItemsFilter })
+$controls.StartupSourceFilterComboBox.Add_SelectionChanged({ Apply-StartupItemsFilter })
 $window.Add_ContentRendered({ Update-BootLensView })
 
 $null = $window.ShowDialog()

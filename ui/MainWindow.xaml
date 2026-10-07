@@ -351,6 +351,7 @@
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
 
@@ -371,9 +372,45 @@
                                         Text="--" />
                                 </Grid>
 
+                                <Grid Grid.Row="1" Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="190" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock
+                                        Margin="0,0,8,0"
+                                        VerticalAlignment="Center"
+                                        Foreground="{StaticResource MutedBrush}"
+                                        Text="搜索名称或目标" />
+                                    <TextBox
+                                        x:Name="StartupSearchTextBox"
+                                        Grid.Column="1"
+                                        Padding="7,5"
+                                        VerticalContentAlignment="Center" />
+                                    <TextBlock
+                                        Grid.Column="2"
+                                        Margin="18,0,8,0"
+                                        VerticalAlignment="Center"
+                                        Foreground="{StaticResource MutedBrush}"
+                                        Text="来源" />
+                                    <ComboBox
+                                        x:Name="StartupSourceFilterComboBox"
+                                        Grid.Column="3"
+                                        Padding="6"
+                                        SelectedIndex="0">
+                                        <ComboBoxItem Content="全部来源" />
+                                        <ComboBoxItem Content="Registry Run" />
+                                        <ComboBoxItem Content="Startup Folder" />
+                                        <ComboBoxItem Content="Scheduled Task" />
+                                    </ComboBox>
+                                </Grid>
+
                                 <DataGrid
                                     x:Name="StartupItemsDataGrid"
-                                    Grid.Row="1"
+                                    Grid.Row="2"
                                     AutoGenerateColumns="False"
                                     BorderThickness="0"
                                     CanUserAddRows="False"
