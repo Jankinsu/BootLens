@@ -1181,30 +1181,16 @@ README 应始终反映：
 当前项目处于：
 
 ```text
-Phase 0
+Phase 0 已完成
+准备进入 Phase 1
 ```
 
-当前任务：
+Phase 0 已经完成：
 
-> 验证 Windows 启动性能数据来源，并建立最小可靠数据模型。
-
-首先解决：
-
-```text
-一次 Windows 启动是什么？
-```
-
-然后解决：
-
-```text
-Windows 记录了哪些启动时间？
-```
-
-最后才开始：
-
-```text
-如何把它做成 GUI？
-```
+- Windows 完整启动判定；
+- Event ID 100 关键字段验证；
+- Fast Startup 排除规则；
+- `BootRecord` v1 数据契约。
 
 当前已有 Phase 0 检查脚本：
 
@@ -1217,7 +1203,20 @@ Windows 记录了哪些启动时间？
 
 ```text
 docs/phase-0-data-validation.md
+docs/boot-record.md
 ```
+
+当前已经确认：
+
+```text
+Restart                          = 完整启动
+shutdown /s /t 0 后开机          = 完整启动
+启用 Fast Startup 的普通关机后开机 = 排除
+```
+
+当前任务：
+
+> 按 `BootRecord` v1 数据契约实现 Phase 1 启动历史 CLI。
 
 ---
 
