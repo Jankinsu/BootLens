@@ -1184,7 +1184,7 @@ README 应始终反映：
 Phase 0 已完成
 Phase 1 启动历史 CLI 初版已完成
 Phase 1 轻量 GUI 原型已实现
-Phase 2 Registry Run 与 Startup Folder 启动项发现已实现
+Phase 2 Registry Run、Startup Folder 与 Scheduled Tasks 启动项发现已实现
 Phase 2 启动项 GUI 页面已实现
 ```
 
@@ -1227,13 +1227,14 @@ GUI 原型采用 Windows PowerShell 5.1 + WPF：
 GUI 当前包含两个只读页面：
 
 - 启动历史：完整启动耗时、阶段构成与最近记录；
-- 启动项：Registry Run 与 Startup Folder 来源、作用域、目标路径、Publisher 和解析状态。
+- 启动项：Registry Run、Startup Folder 与 Scheduled Tasks 来源、作用域、目标路径、Publisher、解析状态和启用状态。
 
 当前已有 Phase 2 Registry Run CLI：
 
 ```powershell
 .\bootlens-startup.ps1
 .\bootlens-startup.ps1 -Source StartupFolder
+.\bootlens-startup.ps1 -Source ScheduledTask
 .\bootlens-startup.ps1 -ShowCommand
 .\bootlens-startup.ps1 -AsJson
 ```
@@ -1255,7 +1256,15 @@ Startup Folder Provider 当前提供：
 - `desktop.ini` 与子目录排除；
 - UNC 目标不主动进行网络探测。
 
-2026-10-07 已使用本机真实数据完成验证：发现 18 条 Registry Run 配置和 2 条 Startup Folder 快捷方式，共 20 条登录启动配置。
+Scheduled Tasks Provider 当前提供：
+
+- 只读发现包含用户登录触发器的任务；
+- 保留全部登录触发器、延迟和动作；
+- 区分 Exec、COM Handler 与多动作任务；
+- 使用公开 Task Settings 与 Trigger Enabled 字段判断配置启用状态；
+- 普通权限无法枚举时局部降级，不影响其他启动项来源。
+
+2026-10-07 已使用本机真实数据完成验证：发现 18 条 Registry Run 配置、2 条 Startup Folder 快捷方式和 45 条用户登录触发计划任务，共 65 条登录启动配置。计划任务完整枚举在当前机器上需要管理员权限。
 
 CLI 当前提供：
 
@@ -1288,7 +1297,7 @@ shutdown /s /t 0 后开机          = 完整启动
 
 当前任务：
 
-> 验证 GUI 启动项页面的信息密度和可读性，再继续增加下一种启动项来源。
+> 验证加入 Scheduled Tasks 后的 GUI 信息密度和可读性，再继续增加下一种启动项来源。
 
 ---
 

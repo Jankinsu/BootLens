@@ -36,6 +36,7 @@ $controlNames = @(
     'StartupTotalValue'
     'RegistryStartupCountValue'
     'FolderStartupCountValue'
+    'TaskStartupCountValue'
     'UnresolvedStartupCountValue'
     'StartupItemCountText'
     'StartupItemsDataGrid'
@@ -180,11 +181,13 @@ function Update-StartupItemsView {
     $items = @(Get-BootLensStartupItem)
     $registryCount = @($items | Where-Object Source -eq 'RegistryRun').Count
     $folderCount = @($items | Where-Object Source -eq 'StartupFolder').Count
+    $taskCount = @($items | Where-Object Source -eq 'ScheduledTask').Count
     $unresolvedCount = @($items | Where-Object CommandParseStatus -eq 'Unresolved').Count
 
     $controls.StartupTotalValue.Text = [string]$items.Count
     $controls.RegistryStartupCountValue.Text = [string]$registryCount
     $controls.FolderStartupCountValue.Text = [string]$folderCount
+    $controls.TaskStartupCountValue.Text = [string]$taskCount
     $controls.UnresolvedStartupCountValue.Text = [string]$unresolvedCount
     $controls.StartupItemCountText.Text = '{0} configured logon items' -f $items.Count
 
@@ -192,13 +195,30 @@ function Update-StartupItemsView {
         foreach ($item in $items) {
             [pscustomobject]@{
                 Name       = $item.Name
-                Source     = if ($item.Source -eq 'RegistryRun') { 'Registry Run' } else { 'Startup Folder' }
-                Scope      = if ($item.Scope -eq 'CurrentUser') { 'Current user' } else { 'All users' }
-                Executable = if ($item.CommandParseStatus -eq 'Resolved') {
-                    $item.ExecutablePath
+                Source     = switch ($item.Source) {
+                    'RegistryRun' { 'Registry Run' }
+                    'StartupFolder' { 'Startup Folder' }
+                    'ScheduledTask' { 'Scheduled Task' }
+                }
+                Scope      = if ($item.Source -eq 'ScheduledTask') {
+                    switch ($item.TaskLogonAudience) {
+                        'AnyUser' { 'Any user' }
+                        'SpecificUser' { 'Specific user' }
+                        'Mixed' { 'Mixed users' }
+                        default { 'Machine task' }
+                    }
+                }
+                elseif ($item.Scope -eq 'CurrentUser') {
+                    'Current user'
                 }
                 else {
-                    'Unknown'
+                    'All users'
+                }
+                Executable = switch ($item.CommandParseStatus) {
+                    'Resolved' { $item.ExecutablePath }
+                    'NotApplicable' { 'COM handler' }
+                    'MultipleTargets' { 'Multiple actions' }
+                    default { 'Unknown' }
                 }
                 Publisher  = if ([string]::IsNullOrWhiteSpace([string]$item.Publisher)) {
                     'Unknown'

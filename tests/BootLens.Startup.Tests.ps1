@@ -78,7 +78,7 @@ $item = ConvertTo-RegistryRunStartupItem `
     -RegistryValueKind 'String' `
     -Scope 'CurrentUser' `
     -RegistryView 'Shared'
-Assert-Equal 2 $item.SchemaVersion 'StartupItem schema version should be two.'
+Assert-Equal 3 $item.SchemaVersion 'StartupItem schema version should be three.'
 Assert-Equal 'RegistryRun' $item.Source 'StartupItem source should be RegistryRun.'
 Assert-Equal 'UserLogon' $item.Trigger 'Registry Run should use the UserLogon trigger.'
 Assert-Equal 'Unknown' $item.EnabledState 'Enabled state should not be inferred.'
@@ -125,7 +125,7 @@ try {
         -Scope 'CurrentUser' `
         -StartupFolderKind 'UserStartup' `
         -StartupFolderPath $folderTestDirectory
-    Assert-Equal 2 $folderItem.SchemaVersion 'Startup Folder item should use schema version two.'
+    Assert-Equal 3 $folderItem.SchemaVersion 'Startup Folder item should use schema version three.'
     Assert-Equal 'StartupFolder' $folderItem.Source 'Startup Folder source should be preserved.'
     Assert-Equal 'Shortcut' $folderItem.StartupEntryType 'A .lnk file should be a shortcut entry.'
     Assert-Equal $folderTestExecutable $folderItem.ExecutablePath 'Shortcut target should be resolved.'
@@ -161,5 +161,100 @@ finally {
         Remove-Item -LiteralPath $folderTestDirectory -Force
     }
 }
+
+$execTask = [pscustomobject]@{
+    TaskPath   = '\Vendor\'
+    TaskName   = 'Example Logon Task'
+    State      = 'Ready'
+    Author     = 'Example Publisher'
+    Description = 'Starts an example application at logon.'
+    Settings   = [pscustomobject]@{
+        Enabled = $true
+        Hidden  = $false
+    }
+    Principal  = [pscustomobject]@{
+        UserId   = 'EXAMPLE\User'
+        LogonType = 'Interactive'
+        RunLevel  = 'Limited'
+    }
+    Triggers    = @(
+        [pscustomobject]@{
+            Type    = 'MSFT_TaskLogonTrigger'
+            Enabled = $true
+            UserId  = 'EXAMPLE\User'
+            Delay   = 'PT10S'
+        },
+        [pscustomobject]@{
+            Type    = 'MSFT_TaskBootTrigger'
+            Enabled = $true
+        }
+    )
+    Actions     = @(
+        [pscustomobject]@{
+            Type             = 'MSFT_TaskExecAction'
+            Execute          = '"C:\Program Files\Example\example.exe"'
+            Arguments        = '--startup'
+            WorkingDirectory = 'C:\Program Files\Example'
+        }
+    )
+}
+$taskItem = ConvertTo-ScheduledTaskStartupItem -Task $execTask
+Assert-Equal 3 $taskItem.SchemaVersion 'Scheduled Task item should use schema version three.'
+Assert-Equal 'ScheduledTask' $taskItem.Source 'Scheduled Task source should be preserved.'
+Assert-Equal 'Resolved' $taskItem.CommandParseStatus 'A single Exec action should be resolved.'
+Assert-Equal 'C:\Program Files\Example\example.exe' $taskItem.ExecutablePath 'Exec quotes should be removed.'
+Assert-Equal '--startup' $taskItem.Arguments 'Exec arguments should remain separate.'
+Assert-Equal 'SpecificUser' $taskItem.TaskLogonAudience 'An explicit trigger user should be preserved as audience.'
+Assert-Equal 'Enabled' $taskItem.EnabledState 'An enabled task with an enabled logon trigger should be enabled.'
+Assert-Equal 1 $taskItem.TaskLogonTriggers.Count 'Only logon triggers should be retained.'
+Assert-Equal 1 $taskItem.TaskActions.Count 'All task actions should be retained.'
+Assert-Equal `
+    'ScheduledTask|%5CVendor%5C|Example%20Logon%20Task' `
+    $taskItem.SourceIdentity `
+    'Scheduled Task identity should include escaped path and name.'
+
+$comTask = [pscustomobject]@{
+    TaskPath  = '\Microsoft\Windows\Example\'
+    TaskName  = 'COM Logon Task'
+    State     = 'Ready'
+    Settings  = [pscustomobject]@{ Enabled = $true; Hidden = $true }
+    Principal = [pscustomobject]@{ UserId = ''; LogonType = 'Group'; RunLevel = 'Limited' }
+    Triggers   = @(
+        [pscustomobject]@{
+            Type = 'MSFT_TaskLogonTrigger'; Enabled = $false; UserId = ''; Delay = 'PT1M'
+        }
+    )
+    Actions    = @(
+        [pscustomobject]@{
+            Type = 'MSFT_TaskComHandlerAction'; ClassId = '{00000000-0000-0000-0000-000000000000}'; Data = 'example'
+        }
+    )
+}
+$comItem = ConvertTo-ScheduledTaskStartupItem -Task $comTask
+Assert-Equal 'NotApplicable' $comItem.CommandParseStatus 'A COM handler should not fabricate an executable.'
+Assert-Equal $null $comItem.ExecutablePath 'A COM handler should not expose a fake executable path.'
+Assert-Equal 'Disabled' $comItem.EnabledState 'A task without an enabled logon trigger should be disabled.'
+Assert-Equal 'AnyUser' $comItem.TaskLogonAudience 'An empty trigger user should mean any user.'
+Assert-Equal `
+    '{00000000-0000-0000-0000-000000000000}' `
+    $comItem.TaskActions[0].ClassId `
+    'COM handler metadata should be retained.'
+
+$nonLogonTask = [pscustomobject]@{
+    TaskPath  = '\'
+    TaskName  = 'Boot Only Task'
+    Settings  = [pscustomobject]@{ Enabled = $true; Hidden = $false }
+    Principal = [pscustomobject]@{}
+    Triggers   = @([pscustomobject]@{ Type = 'MSFT_TaskBootTrigger'; Enabled = $true })
+    Actions    = @()
+}
+$nonLogonItem = @(ConvertTo-ScheduledTaskStartupItem -Task $nonLogonTask)
+Assert-Equal 0 $nonLogonItem.Count 'A task without a logon trigger should be excluded.'
+
+$registryProperties = @($item.PSObject.Properties.Name | Sort-Object) -join '|'
+$folderProperties = @($folderItem.PSObject.Properties.Name | Sort-Object) -join '|'
+$taskProperties = @($taskItem.PSObject.Properties.Name | Sort-Object) -join '|'
+Assert-Equal $registryProperties $folderProperties 'Registry and Startup Folder items should share one schema.'
+Assert-Equal $registryProperties $taskProperties 'Registry and Scheduled Task items should share one schema.'
 
 Write-Output 'BootLens startup tests: PASS'

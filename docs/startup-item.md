@@ -1,16 +1,17 @@
-# StartupItem v2 数据契约
+# StartupItem v3 数据契约
 
-状态：Phase 2 Registry Run 与 Startup Folder 数据验证已完成，可用于统一启动项发现。
+状态：Phase 2 Registry Run、Startup Folder 与 Scheduled Tasks 数据验证已完成，可用于统一启动项发现。
 
 ## 1. 定义
 
 一个 `StartupItem` 表示 Windows 中一条可追溯来源的自动启动配置。
 
-v2 支持两种来源：
+v3 支持三种来源：
 
 ```text
 Registry Run
 Startup Folder
+Scheduled Tasks
 ```
 
 注册表 `Run` 的触发语义是：
@@ -19,7 +20,7 @@ Startup Folder
 
 它不表示该程序参与内核初始化，也不保证程序在桌面出现前执行。Windows 可能延迟执行，多个 `Run` 项之间也没有确定顺序。
 
-## 2. v2 范围
+## 2. v3 范围
 
 当前实现接受：
 
@@ -33,13 +34,15 @@ Current User Startup Folder
 Common Startup Folder
 Windows shortcuts (.lnk)
 direct files
+Scheduled Tasks with a user-logon trigger
+Exec actions
+COM Handler actions
 ```
 
 当前暂不包含：
 
 ```text
 RunOnce
-Scheduled Tasks
 Windows Services
 UWP Startup Tasks
 Shell Extensions
@@ -51,16 +54,16 @@ Shell Extensions
 
 | 字段 | 类型 | 必需 | 语义 |
 |---|---|---:|---|
-| `SchemaVersion` | Integer | 是 | 数据契约版本，当前固定为 `2` |
+| `SchemaVersion` | Integer | 是 | 数据契约版本，当前固定为 `3` |
 | `Name` | String | 是 | 用于展示的启动项名称 |
-| `Source` | Enum | 是 | `RegistryRun` 或 `StartupFolder` |
+| `Source` | Enum | 是 | `RegistryRun`、`StartupFolder` 或 `ScheduledTask` |
 | `Trigger` | Enum | 是 | 当前固定为 `UserLogon` |
 | `Scope` | Enum | 是 | `CurrentUser` 或 `LocalMachine` |
 | `CommandLineRaw` | String | 条件 | Registry Run 保存的原始命令行；Startup Folder 不伪造该字段 |
 | `CommandLineExpanded` | String | 否 | 对 Registry `REG_EXPAND_SZ` 安全展开环境变量后的命令行 |
 | `ExecutablePath` | String | 否 | 仅在能够可靠解析时填写的可执行文件路径 |
 | `Arguments` | String | 否 | 仅在能够与可执行文件可靠分离时填写的参数 |
-| `CommandParseStatus` | Enum | 是 | `Resolved` 或 `Unresolved` |
+| `CommandParseStatus` | Enum | 是 | `Resolved`、`Unresolved`、`NotApplicable` 或 `MultipleTargets` |
 | `ExecutableExists` | Boolean | 否 | 解析出路径后，该文件在扫描时是否存在 |
 | `Publisher` | String | 否 | 能够读取文件版本信息时的发布者；否则为空 |
 | `EnabledState` | Enum | 是 | `Enabled`、`Disabled` 或 `Unknown` |
@@ -76,6 +79,19 @@ Shell Extensions
 | `ShortcutTargetPath` | String | 否 | `.lnk` 保存的 TargetPath |
 | `ShortcutArguments` | String | 否 | `.lnk` 保存的 Arguments |
 | `ShortcutWorkingPath` | String | 否 | `.lnk` 保存的 WorkingDirectory |
+| `TaskPath` | String | 条件 | 计划任务所在 Task Scheduler 路径 |
+| `TaskName` | String | 条件 | 计划任务名称 |
+| `TaskState` | String | 条件 | 扫描时任务状态，例如 `Ready`、`Running` 或 `Disabled` |
+| `TaskEnabled` | Boolean | 条件 | Task Settings 的公开 `Enabled` 状态 |
+| `TaskHidden` | Boolean | 条件 | Task Settings 的 `Hidden` 状态 |
+| `TaskAuthor` | String | 否 | 任务注册信息中的 Author |
+| `TaskDescription` | String | 否 | 任务注册信息中的 Description |
+| `TaskPrincipalUserId` | String | 否 | 任务 Principal 的用户或组标识 |
+| `TaskPrincipalLogonType` | String | 否 | 任务 Principal 的登录类型 |
+| `TaskPrincipalRunLevel` | String | 否 | 任务 Principal 的运行级别 |
+| `TaskLogonAudience` | Enum | 条件 | `AnyUser`、`SpecificUser` 或 `Mixed` |
+| `TaskLogonTriggers` | Array | 条件 | 全部登录触发器的 Enabled、UserId 与 Delay |
+| `TaskActions` | Array | 条件 | 全部动作的类型及来源字段，不丢弃 COM Handler 信息 |
 | `SourceIdentity` | String | 是 | 用于标识来源记录的稳定复合键，不等同于程序身份 |
 
 所有 Provider 输出相同的属性集合。不适用于当前 Source 的来源专属字段使用空值，不用空字符串或伪造值填充。
@@ -120,6 +136,17 @@ D:\NDM\Neat Download Manager\NeatDM.exe -autostart
 5. 无法解析或 TargetPath 为空的快捷方式仍可保留来源，但状态为 `Unresolved`；
 6. UNC 目标可以记录，但扫描时不主动访问网络检查文件或 Publisher。
 
+对于 Scheduled Tasks：
+
+1. 只纳入至少包含一个用户登录触发器的任务；
+2. 任务可能包含多个动作，所有动作都原样保存在 `TaskActions`；
+3. 唯一 Exec 动作的 Execute 与 Arguments 分开保存，不拼接伪造 `CommandLineRaw`；
+4. Execute 中的环境变量可以安全展开，外围引号可以移除；
+5. COM Handler 没有可直接等价的 EXE，公共目标状态为 `NotApplicable`；
+6. 多动作任务的公共目标状态为 `MultipleTargets`，不任意选择某一个动作；
+7. Delay 保留 Task Scheduler 的 ISO 8601 原值，例如 `PT10M`；
+8. 扫描过程只读，绝不运行任务或动作。
+
 ## 5. 启用状态
 
 注册表 `Run` 值存在，只能证明该命令已经注册为登录启动项。
@@ -138,7 +165,7 @@ Windows 当前一定会执行它
 Explorer\StartupApproved\Run
 ```
 
-其中保存了任务管理器使用的二进制状态，但目前没有找到微软公开、稳定的数据格式说明。BootLens v2 不根据非公开字节值猜测启用状态。
+其中保存了任务管理器使用的二进制状态，但目前没有找到微软公开、稳定的数据格式说明。BootLens v3 不根据非公开字节值猜测启用状态。
 
 因此当前 Registry Run 与 Startup Folder Provider 均使用：
 
@@ -147,6 +174,16 @@ EnabledState = Unknown
 ```
 
 后续只有在完成受控实验并确认兼容边界后，才能将其升级为 `Enabled` 或 `Disabled`。
+
+Scheduled Tasks 提供公开的 Task Settings 与 Trigger Enabled 字段。v3 采用：
+
+```text
+任务禁用，或没有启用的登录触发器 = Disabled
+任务启用，且至少有一个启用的登录触发器 = Enabled
+字段缺失 = Unknown
+```
+
+这只描述任务配置状态，不表示任务本次登录已经运行。
 
 ## 6. 32 位与 64 位注册表视图
 
@@ -167,7 +204,7 @@ EnabledState = Unknown
 
 一条注册表值必须同时满足：
 
-1. 位于 v2 支持的 `Run` 键；
+1. 位于 v3 支持的 `Run` 键；
 2. 值名称非空；
 3. 值类型为 `REG_SZ` 或 `REG_EXPAND_SZ`；
 4. 原始命令行非空；
@@ -186,6 +223,16 @@ EnabledState = Unknown
 
 快捷方式目标无法解析时，不排除来源记录，只将 `CommandParseStatus` 设为 `Unresolved`。
 
+### 7.3 Scheduled Tasks
+
+一条计划任务必须同时满足：
+
+1. TaskPath 与 TaskName 非空；
+2. 至少包含一个 `MSFT_TaskLogonTrigger`；
+3. 来源身份可以稳定构造。
+
+动作不是 Exec 或动作数量不为一时，仍保留任务，只是不生成猜测性的公共可执行文件字段。
+
 不满足条件时：
 
 ```text
@@ -202,6 +249,7 @@ EnabledState = Unknown
 ```text
 RegistryRun|<Hive>|<View>|<KeyPath>|<EscapedValueName>
 StartupFolder|<Scope>|<EscapedEntryPath>
+ScheduledTask|<EscapedTaskPath>|<EscapedTaskName>
 ```
 
 `RegistryValueName` 在复合键中使用 URI 转义，避免名称本身含有分隔符时产生碰撞。
@@ -211,6 +259,7 @@ StartupFolder|<Scope>|<EscapedEntryPath>
 ```text
 RegistryRun|CurrentUser|Shared|Software\Microsoft\Windows\CurrentVersion\Run|Steam
 StartupFolder|LocalMachine|C%3A%5CProgramData%5CMicrosoft%5CWindows%5CStart%20Menu%5CPrograms%5CStartup%5CTailscale.lnk
+ScheduledTask|%5CMicrosoft%5COffice%5C|Office%20Startup%20Maintenance
 ```
 
 `SourceIdentity` 只表示同一个配置来源，不表示两个名称不同的记录一定属于不同程序。
@@ -219,9 +268,11 @@ StartupFolder|LocalMachine|C%3A%5CProgramData%5CMicrosoft%5CWindows%5CStart%20Me
 
 ## 9. 示例
 
+为突出各来源语义，以下示例省略不适用且值为 `null` 的来源专属字段；实际 Provider 输出仍使用同一属性集合。
+
 ```json
 {
-  "SchemaVersion": 2,
+  "SchemaVersion": 3,
   "Name": "Steam",
   "Source": "RegistryRun",
   "Trigger": "UserLogon",
@@ -256,7 +307,7 @@ Startup Folder 示例：
 
 ```json
 {
-  "SchemaVersion": 2,
+  "SchemaVersion": 3,
   "Name": "Tailscale",
   "Source": "StartupFolder",
   "Trigger": "UserLogon",
@@ -285,7 +336,41 @@ Startup Folder 示例：
 }
 ```
 
-## 10. 不进入 v2 的字段
+Scheduled Task 示例：
+
+```json
+{
+  "SchemaVersion": 3,
+  "Name": "Example Logon Task",
+  "Source": "ScheduledTask",
+  "Trigger": "UserLogon",
+  "Scope": "LocalMachine",
+  "CommandLineRaw": null,
+  "ExecutablePath": "C:\\Program Files\\Example\\example.exe",
+  "Arguments": "/onlogon",
+  "CommandParseStatus": "Resolved",
+  "EnabledState": "Enabled",
+  "TaskPath": "\\Vendor\\",
+  "TaskName": "Example Logon Task",
+  "TaskLogonAudience": "AnyUser",
+  "TaskLogonTriggers": [
+    { "Enabled": true, "UserId": "", "Delay": "PT15M" }
+  ],
+  "TaskActions": [
+    {
+      "Type": "MSFT_TaskExecAction",
+      "Execute": "C:\\Program Files\\Example\\example.exe",
+      "Arguments": "/onlogon",
+      "WorkingDirectory": "",
+      "ClassId": null,
+      "Data": null
+    }
+  ],
+  "SourceIdentity": "ScheduledTask|%5CVendor%5C|Example%20Logon%20Task"
+}
+```
+
+## 10. 不进入 v3 的字段
 
 ### Startup Impact
 
@@ -329,6 +414,22 @@ Common Startup             1 条有效快捷方式
 - Common Startup 中的 Tailscale 快捷方式包含 TargetPath 和 WorkingDirectory；
 - 两个快捷方式目标均可解析且文件存在。
 
+2026-10-07 使用管理员权限进行只读 Scheduled Tasks Provider 验证：
+
+```text
+登录触发计划任务       45 条
+Enabled               32 条
+Disabled              13 条
+唯一 Exec 动作         28 条
+COM Handler            17 条
+AnyUser               41 条
+SpecificUser           4 条
+无效 Schema            0 条
+缺失/重复身份           0 条
+```
+
+普通权限下本机拒绝完整枚举计划任务。Provider 会返回空的该来源并发出权限提示，不影响 Registry Run 与 Startup Folder 结果。
+
 ## 12. 参考资料
 
 - [Run and RunOnce Registry Keys](https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys)
@@ -336,8 +437,20 @@ Common Startup             1 条有效快捷方式
 - [Registry Keys Affected by WOW64](https://learn.microsoft.com/en-us/windows/win32/winprog64/shared-registry-keys)
 - [KNOWNFOLDERID](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid)
 - [Create a shortcut with Windows Script Host](https://learn.microsoft.com/en-us/troubleshoot/windows-client/admin-development/create-desktop-shortcut-with-wsh)
+- [LogonTrigger object](https://learn.microsoft.com/en-us/windows/win32/taskschd/logontrigger)
+- [Task Scheduler actions](https://learn.microsoft.com/en-us/windows/win32/taskschd/task-actions)
+- [Logon trigger Delay element](https://learn.microsoft.com/en-us/windows/win32/taskschd/taskschedulerschema-delay-logontriggertype-element)
+- [ScheduledTasks PowerShell module](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/)
 
 ## 13. 版本变化
+
+### v3
+
+- 增加 `ScheduledTask` Source；
+- 保留全部登录触发器、Exec 与 COM Handler 动作；
+- 使用公开任务配置字段判断计划任务启用状态；
+- 增加 `NotApplicable` 与 `MultipleTargets` 解析状态；
+- SchemaVersion 从 `2` 更新为 `3`。
 
 ### v2
 

@@ -33,6 +33,50 @@ function Get-FilePublisher {
     return $null
 }
 
+function Get-OptionalPropertyValue {
+    param(
+        [AllowNull()]
+        [object]$InputObject,
+
+        [Parameter(Mandatory)]
+        [string]$Name
+    )
+
+    if ($null -eq $InputObject) {
+        return $null
+    }
+
+    $property = $InputObject.PSObject.Properties[$Name]
+
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
+function Get-ScheduledTaskObjectType {
+    param(
+        [Parameter(Mandatory)]
+        [object]$InputObject
+    )
+
+    $cimClass = Get-OptionalPropertyValue -InputObject $InputObject -Name 'CimClass'
+    $cimClassName = Get-OptionalPropertyValue -InputObject $cimClass -Name 'CimClassName'
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$cimClassName)) {
+        return [string]$cimClassName
+    }
+
+    $type = Get-OptionalPropertyValue -InputObject $InputObject -Name 'Type'
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$type)) {
+        return [string]$type
+    }
+
+    return 'Unknown'
+}
+
 function ConvertTo-StartupCommandInfo {
     [CmdletBinding()]
     param(
@@ -172,7 +216,7 @@ function ConvertTo-RegistryRunStartupItem {
         [Uri]::EscapeDataString($Name)
 
     [pscustomobject][ordered]@{
-        SchemaVersion       = 2
+        SchemaVersion       = 3
         Name                = $Name
         Source              = 'RegistryRun'
         Trigger             = 'UserLogon'
@@ -197,6 +241,19 @@ function ConvertTo-RegistryRunStartupItem {
         ShortcutTargetPath  = $null
         ShortcutArguments   = $null
         ShortcutWorkingPath = $null
+        TaskPath            = $null
+        TaskName            = $null
+        TaskState           = $null
+        TaskEnabled         = $null
+        TaskHidden          = $null
+        TaskAuthor          = $null
+        TaskDescription     = $null
+        TaskPrincipalUserId = $null
+        TaskPrincipalLogonType = $null
+        TaskPrincipalRunLevel  = $null
+        TaskLogonAudience   = $null
+        TaskLogonTriggers   = $null
+        TaskActions         = $null
         SourceIdentity      = $sourceIdentity
     }
 }
@@ -317,7 +374,7 @@ function ConvertTo-StartupFolderStartupItem {
         [Uri]::EscapeDataString($entry.FullName)
 
     [pscustomobject][ordered]@{
-        SchemaVersion       = 2
+        SchemaVersion       = 3
         Name                = $name
         Source              = 'StartupFolder'
         Trigger             = 'UserLogon'
@@ -342,6 +399,191 @@ function ConvertTo-StartupFolderStartupItem {
         ShortcutTargetPath  = $shortcutTargetPath
         ShortcutArguments   = $shortcutArguments
         ShortcutWorkingPath = $shortcutWorkingPath
+        TaskPath            = $null
+        TaskName            = $null
+        TaskState           = $null
+        TaskEnabled         = $null
+        TaskHidden          = $null
+        TaskAuthor          = $null
+        TaskDescription     = $null
+        TaskPrincipalUserId = $null
+        TaskPrincipalLogonType = $null
+        TaskPrincipalRunLevel  = $null
+        TaskLogonAudience   = $null
+        TaskLogonTriggers   = $null
+        TaskActions         = $null
+        SourceIdentity      = $sourceIdentity
+    }
+}
+
+function ConvertTo-ScheduledTaskStartupItem {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$Task
+    )
+
+    $taskPath = [string](Get-OptionalPropertyValue -InputObject $Task -Name 'TaskPath')
+    $taskName = [string](Get-OptionalPropertyValue -InputObject $Task -Name 'TaskName')
+
+    if ([string]::IsNullOrWhiteSpace($taskPath) -or
+        [string]::IsNullOrWhiteSpace($taskName)) {
+        return
+    }
+
+    $logonTriggers = @(
+        foreach ($trigger in @(Get-OptionalPropertyValue -InputObject $Task -Name 'Triggers')) {
+            if ((Get-ScheduledTaskObjectType -InputObject $trigger) -ne 'MSFT_TaskLogonTrigger') {
+                continue
+            }
+
+            [pscustomobject][ordered]@{
+                Enabled = Get-OptionalPropertyValue -InputObject $trigger -Name 'Enabled'
+                UserId  = Get-OptionalPropertyValue -InputObject $trigger -Name 'UserId'
+                Delay   = Get-OptionalPropertyValue -InputObject $trigger -Name 'Delay'
+            }
+        }
+    )
+
+    if ($logonTriggers.Count -eq 0) {
+        return
+    }
+
+    $actions = @(
+        foreach ($action in @(Get-OptionalPropertyValue -InputObject $Task -Name 'Actions')) {
+            [pscustomobject][ordered]@{
+                Type             = Get-ScheduledTaskObjectType -InputObject $action
+                Execute          = Get-OptionalPropertyValue -InputObject $action -Name 'Execute'
+                Arguments        = Get-OptionalPropertyValue -InputObject $action -Name 'Arguments'
+                WorkingDirectory = Get-OptionalPropertyValue -InputObject $action -Name 'WorkingDirectory'
+                ClassId          = Get-OptionalPropertyValue -InputObject $action -Name 'ClassId'
+                Data             = Get-OptionalPropertyValue -InputObject $action -Name 'Data'
+            }
+        }
+    )
+    $settings = Get-OptionalPropertyValue -InputObject $Task -Name 'Settings'
+    $principal = Get-OptionalPropertyValue -InputObject $Task -Name 'Principal'
+    $taskEnabled = Get-OptionalPropertyValue -InputObject $settings -Name 'Enabled'
+    $enabledTriggerCount = @($logonTriggers | Where-Object Enabled -eq $true).Count
+    $enabledState = if ($taskEnabled -eq $false -or $enabledTriggerCount -eq 0) {
+        'Disabled'
+    }
+    elseif ($taskEnabled -eq $true) {
+        'Enabled'
+    }
+    else {
+        'Unknown'
+    }
+    $userIds = @(
+        $logonTriggers |
+            ForEach-Object { [string]$_.UserId } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Sort-Object -Unique
+    )
+    $emptyUserIdCount = @(
+        $logonTriggers |
+            Where-Object { [string]::IsNullOrWhiteSpace([string]$_.UserId) }
+    ).Count
+    $logonAudience = if ($userIds.Count -eq 0) {
+        'AnyUser'
+    }
+    elseif ($emptyUserIdCount -gt 0) {
+        'Mixed'
+    }
+    else {
+        'SpecificUser'
+    }
+    $executablePath = $null
+    $arguments = $null
+    $commandParseStatus = if ($actions.Count -eq 1 -and
+        $actions[0].Type -eq 'MSFT_TaskExecAction') {
+        $execute = [string]$actions[0].Execute
+
+        if ([string]::IsNullOrWhiteSpace($execute)) {
+            'Unresolved'
+        }
+        else {
+            $expandedExecute = [Environment]::ExpandEnvironmentVariables($execute.Trim())
+
+            if ($expandedExecute.Length -ge 2 -and
+                $expandedExecute[0] -eq '"' -and
+                $expandedExecute[$expandedExecute.Length - 1] -eq '"') {
+                $expandedExecute = $expandedExecute.Substring(1, $expandedExecute.Length - 2)
+            }
+
+            $executablePath = $expandedExecute
+            $argumentsValue = [string]$actions[0].Arguments
+            $arguments = if ([string]::IsNullOrWhiteSpace($argumentsValue)) {
+                $null
+            }
+            else {
+                $argumentsValue
+            }
+            'Resolved'
+        }
+    }
+    elseif ($actions.Count -gt 1) {
+        'MultipleTargets'
+    }
+    else {
+        'NotApplicable'
+    }
+    $executableExists = if ($commandParseStatus -eq 'Resolved' -and
+        (Test-LocalAbsolutePath -Path $executablePath)) {
+        [bool](Test-Path -LiteralPath $executablePath -PathType Leaf)
+    }
+    else {
+        $null
+    }
+    $publisher = if ($executableExists -eq $true) {
+        Get-FilePublisher -Path $executablePath
+    }
+    else {
+        $null
+    }
+    $sourceIdentity = 'ScheduledTask|{0}|{1}' -f
+        [Uri]::EscapeDataString($taskPath),
+        [Uri]::EscapeDataString($taskName)
+
+    [pscustomobject][ordered]@{
+        SchemaVersion       = 3
+        Name                = $taskName
+        Source              = 'ScheduledTask'
+        Trigger             = 'UserLogon'
+        Scope               = 'LocalMachine'
+        CommandLineRaw      = $null
+        CommandLineExpanded = $null
+        ExecutablePath      = $executablePath
+        Arguments           = $arguments
+        CommandParseStatus  = $commandParseStatus
+        ExecutableExists    = $executableExists
+        Publisher           = $publisher
+        EnabledState        = $enabledState
+        RegistryHive        = $null
+        RegistryView        = $null
+        RegistryKeyPath     = $null
+        RegistryValueName   = $null
+        RegistryValueKind   = $null
+        StartupFolderKind   = $null
+        StartupFolderPath   = $null
+        StartupEntryPath    = $null
+        StartupEntryType    = $null
+        ShortcutTargetPath  = $null
+        ShortcutArguments   = $null
+        ShortcutWorkingPath = $null
+        TaskPath            = $taskPath
+        TaskName            = $taskName
+        TaskState           = [string](Get-OptionalPropertyValue -InputObject $Task -Name 'State')
+        TaskEnabled         = $taskEnabled
+        TaskHidden          = Get-OptionalPropertyValue -InputObject $settings -Name 'Hidden'
+        TaskAuthor          = Get-OptionalPropertyValue -InputObject $Task -Name 'Author'
+        TaskDescription     = Get-OptionalPropertyValue -InputObject $Task -Name 'Description'
+        TaskPrincipalUserId = Get-OptionalPropertyValue -InputObject $principal -Name 'UserId'
+        TaskPrincipalLogonType = Get-OptionalPropertyValue -InputObject $principal -Name 'LogonType'
+        TaskPrincipalRunLevel  = Get-OptionalPropertyValue -InputObject $principal -Name 'RunLevel'
+        TaskLogonAudience   = $logonAudience
+        TaskLogonTriggers   = $logonTriggers
+        TaskActions         = $actions
         SourceIdentity      = $sourceIdentity
     }
 }
@@ -512,6 +754,33 @@ function Get-StartupFolderStartupItem {
     return @($items | Sort-Object Scope, Name)
 }
 
+function Get-ScheduledTaskStartupItem {
+    [CmdletBinding()]
+    param()
+
+    try {
+        $items = @(
+            foreach ($task in @(Get-ScheduledTask -ErrorAction Stop)) {
+                try {
+                    ConvertTo-ScheduledTaskStartupItem -Task $task
+                }
+                catch {
+                    $taskIdentity = '{0}{1}' -f
+                        [string](Get-OptionalPropertyValue -InputObject $task -Name 'TaskPath'),
+                        [string](Get-OptionalPropertyValue -InputObject $task -Name 'TaskName')
+                    Write-Verbose "Excluded Scheduled Task '$taskIdentity': $($_.Exception.Message)"
+                }
+            }
+        )
+
+        return @($items | Sort-Object TaskPath, TaskName)
+    }
+    catch {
+        Write-Warning "Could not read Scheduled Tasks. Administrator access may be required: $($_.Exception.Message)"
+        return @()
+    }
+}
+
 function Get-BootLensStartupItem {
     [CmdletBinding()]
     param()
@@ -519,6 +788,7 @@ function Get-BootLensStartupItem {
     $items = @(
         Get-RegistryRunStartupItem
         Get-StartupFolderStartupItem
+        Get-ScheduledTaskStartupItem
     )
 
     return @($items | Sort-Object Source, Scope, Name)
@@ -528,6 +798,8 @@ Export-ModuleMember -Function `
     ConvertTo-StartupCommandInfo, `
     ConvertTo-RegistryRunStartupItem, `
     ConvertTo-StartupFolderStartupItem, `
+    ConvertTo-ScheduledTaskStartupItem, `
     Get-RegistryRunStartupItem, `
     Get-StartupFolderStartupItem, `
+    Get-ScheduledTaskStartupItem, `
     Get-BootLensStartupItem

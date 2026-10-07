@@ -271,7 +271,7 @@
             <TabItem Header="启动项">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="24,20,12,24">
-                        <UniformGrid Columns="4" Margin="0,0,0,20">
+                        <UniformGrid Columns="5" Margin="0,0,0,20">
                             <Border Style="{StaticResource CardStyle}">
                                 <StackPanel>
                                     <TextBlock Foreground="{StaticResource MutedBrush}" Text="登录启动配置" />
@@ -310,6 +310,18 @@
                             </Border>
                             <Border Style="{StaticResource CardStyle}">
                                 <StackPanel>
+                                    <TextBlock Foreground="{StaticResource MutedBrush}" Text="Scheduled Tasks" />
+                                    <TextBlock
+                                        x:Name="TaskStartupCountValue"
+                                        Margin="0,8,0,0"
+                                        Foreground="#0891B2"
+                                        FontSize="28"
+                                        FontWeight="Bold"
+                                        Text="--" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
                                     <TextBlock Foreground="{StaticResource MutedBrush}" Text="未解析目标" />
                                     <TextBlock
                                         x:Name="UnresolvedStartupCountValue"
@@ -331,7 +343,7 @@
                             CornerRadius="8">
                             <TextBlock
                                 Foreground="#1E3A8A"
-                                Text="这里展示配置为随用户登录启动的项目，不表示它们拖慢了多少。启用状态暂不根据未公开数据进行猜测。"
+                                Text="这里展示配置为随用户登录启动的项目，不表示它们拖慢了多少。计划任务使用公开启用状态；其他来源不根据未公开数据猜测。"
                                 TextWrapping="Wrap" />
                         </Border>
 
@@ -400,7 +412,7 @@
                 <TextBlock
                     Foreground="{StaticResource MutedBrush}"
                     FontSize="12"
-                    Text="数据来源：Windows Event Log、Registry Run、Startup Folder · 全程只读" />
+                    Text="数据来源：Windows Event Log、Registry Run、Startup Folder、Scheduled Tasks · 全程只读" />
                 <TextBlock
                     x:Name="FooterStatusText"
                     Grid.Column="1"
