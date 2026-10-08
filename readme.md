@@ -459,9 +459,7 @@ UI 和数据模型必须保持这种语义区分。
 
 # Phase 4：启动性能关联
 
-这一阶段开始尝试回答：
-
-> 哪些程序可能真正拖慢了 Windows 启动？
+这一阶段只呈现 Windows 明确记录的启动退化事件，并把事件关联到完整启动实例；不据此推导单个程序“拖慢了多少秒”。
 
 数据来源：
 
@@ -472,37 +470,18 @@ Event ID 101
 其他相关启动性能事件
 ```
 
-主要工作：
-
-- Event Log 解析
-- 启动项与性能事件匹配
-- EXE 名称关联
-- 文件路径关联
-- Friendly Name 关联
-- Service 关联
-- Scheduled Task 关联
-
-可能出现：
+展示边界：
 
 ```text
-StartupItem
-    ↓
-Process
-    ↓
-Event Log degradation entry
+Event ID 101 原始记录
+    ├─ StartTime 精确关联 Event ID 100 BootStartTime
+    ├─ TotalTime 与 DegradationTime 分开显示
+    └─ 启动项候选仅标记匹配等级与来源
 ```
 
-此阶段必须明确数据来源。
+目标匹配区分路径精确、应用家族候选、通用宿主、歧义和未匹配。启动项关联比较的是当前只读配置快照，不代表事件发生时的历史配置，也不证明因果关系。`svchost.exe` 不会归因到具体服务。
 
-例如：
-
-```text
-Steam
-
-Boot Offset: +18.2 s
-Measured degradation: 1.4 s
-Source: Windows Diagnostics
-```
+`TotalTime` 与 `DegradationTime` 是 Windows 原样提供的独立字段：不相减、不假设两者大小关系、不加到 Event ID 100 启动总耗时中，不显示为某个程序可归因的“拖慢时长”。
 
 ---
 
@@ -1318,7 +1297,9 @@ shutdown /s /t 0 后开机          = 完整启动
 
 当前任务：
 
-> Phase 2 已覆盖 Registry Run、Startup Folder、Scheduled Tasks 与 Windows Services。UWP Startup Tasks 已完成只读评估：本机发现 4 条包清单声明，但没有适用于 BootLens 的受支持全局状态枚举接口，因此暂缓纳入。Phase 3 当前进程快照 Provider、CLI 与 GUI 页面已实现；下一步完成 GUI 本机视觉与交互验收。
+> Phase 2 已覆盖 Registry Run、Startup Folder、Scheduled Tasks 与 Windows Services。UWP Startup Tasks 已完成只读评估：本机发现 4 条包清单声明，但没有适用于 BootLens 的受支持全局状态枚举接口，因此暂缓纳入。Phase 3 当前进程快照 Provider、CLI 与 GUI 页面已实现，用户已确认功能与页面信息正常；切页延迟约 2–3 秒作为未来 GUI 技术选型/性能评估事项暂缓处理。Phase 4 数据验证在 3 次启动上确认 Event 101 `StartTime` 与 Event 100 `BootStartTime` 精确相等，并明确不推导单应用因果耗时。独立“启动退化”页面及自动化测试已实现；待用户在管理员会话中确认本机 Event 101 展示与匹配标签后，再考虑提交。
+
+GUI 技术选型与性能评估暂缓单独讨论。目前用户观察到：程序完成启动加载后，在三个页面之间切换仍稳定延迟约 2–3 秒。当前切页事件除首次进入进程时间线外不重新采集数据，因此暂不认定为数据查询导致，也尚未确认具体渲染瓶颈。后续专门评估 GUI 技术栈时，将此现象作为性能验收项复测；在技术选型前不据此预先决定迁移或优化方案。
 
 ---
 

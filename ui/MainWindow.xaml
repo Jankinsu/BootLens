@@ -65,7 +65,7 @@
                         Margin="0,5,0,0"
                         Foreground="#9CA3AF"
                         FontSize="13"
-                        Text="Windows 启动历史 · 启动项发现 · 进程时间线" />
+                        Text="Windows 启动历史 · 启动项发现 · 进程时间线 · 启动退化" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -456,7 +456,7 @@
             <TabItem x:Name="ProcessTimelineTab" Header="进程时间线">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="24,20,12,24">
-                        <UniformGrid Columns="4" Margin="0,0,0,20">
+                        <UniformGrid Columns="3" Margin="0,0,0,20">
                             <Border Style="{StaticResource CardStyle}">
                                 <StackPanel>
                                     <TextBlock Foreground="{StaticResource MutedBrush}" Text="运行中进程" />
@@ -565,6 +565,120 @@
                                         <DataGridTextColumn Width="1*" Binding="{Binding BootOffset}" Header="Boot Offset" />
                                         <DataGridTextColumn Width="3*" Binding="{Binding ExecutablePath}" Header="可执行文件" />
                                     </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem x:Name="DegradationTab" Header="启动退化">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="24,20,12,24">
+                        <UniformGrid Columns="4" Margin="0,0,0,20">
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource MutedBrush}" Text="Event 101 记录" />
+                                    <TextBlock x:Name="DegradationEventCountValue" Margin="0,8,0,0" Foreground="{StaticResource HeadingBrush}" FontSize="28" FontWeight="Bold" Text="--" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource MutedBrush}" Text="已关联完整启动" />
+                                    <TextBlock x:Name="DegradationMatchedBootCountValue" Margin="0,8,0,0" Foreground="#059669" FontSize="28" FontWeight="Bold" Text="--" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource MutedBrush}" Text="路径精确匹配" />
+                                    <TextBlock x:Name="DegradationExactPathCountValue" Margin="0,8,0,0" Foreground="#2563EB" FontSize="28" FontWeight="Bold" Text="--" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+
+                        <Border Margin="0,0,12,20" Padding="16,12" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="8">
+                            <TextBlock Foreground="#1E3A8A" Text="每行是一条 Windows 诊断事件。退化值是 Windows 报告的原始指标，不等于该程序造成的启动延迟。选中一行可查看详情。" TextWrapping="Wrap" />
+                        </Border>
+
+                        <Border Margin="0,0,12,0" Style="{StaticResource CardStyle}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,14">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Foreground="{StaticResource HeadingBrush}" FontSize="17" FontWeight="SemiBold" Text="Windows 启动退化事件" />
+                                    <TextBlock x:Name="DegradationListStatusText" Grid.Column="1" Foreground="{StaticResource MutedBrush}" Text="尚未读取" />
+                                </Grid>
+                                <DataGrid
+                                    x:Name="DegradationDataGrid"
+                                    Grid.Row="1"
+                                    AutoGenerateColumns="False"
+                                    BorderThickness="0"
+                                    CanUserAddRows="False"
+                                    CanUserDeleteRows="False"
+                                    CanUserReorderColumns="False"
+                                    CanUserResizeRows="False"
+                                    HeadersVisibility="Column"
+                                    IsReadOnly="True"
+                                    RowDetailsVisibilityMode="VisibleWhenSelected"
+                                    RowHeaderWidth="0"
+                                    SelectionMode="Single"
+                                    GridLinesVisibility="Horizontal"
+                                    HorizontalGridLinesBrush="#E5E7EB">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Width="1.4*" Binding="{Binding BootStart}" Header="启动时间" />
+                                        <DataGridTextColumn Width="2.5*" Binding="{Binding Target}" Header="目标" />
+                                        <DataGridTextColumn Width="1.8*" Binding="{Binding TargetMatch}" Header="匹配等级" />
+                                        <DataGridTextColumn Width="1.2*" Binding="{Binding DegradationTime}" Header="退化值 (ms)" />
+                                    </DataGrid.Columns>
+                                    <DataGrid.RowDetailsTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,2,0,6" Padding="12" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="6">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="2*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Margin="0,0,12,0">
+                                                        <TextBlock Foreground="{StaticResource MutedBrush}" Text="事件与启动关联" />
+                                                        <StackPanel Margin="0,4,0,8" Orientation="Horizontal">
+                                                            <TextBlock Text="Record ID: " />
+                                                            <TextBlock Text="{Binding EventRecordId}" />
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding BootAssociation}" TextWrapping="Wrap" />
+                                                        <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+                                                            <TextBlock Text="事件记录时间: " />
+                                                            <TextBlock Text="{Binding EventTime}" TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                                        <TextBlock Foreground="{StaticResource MutedBrush}" Text="Windows 原始耗时" />
+                                                        <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+                                                            <TextBlock Text="TotalTime: " />
+                                                            <TextBlock Text="{Binding TotalTime}" />
+                                                            <TextBlock Text=" ms" />
+                                                        </StackPanel>
+                                                        <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+                                                            <TextBlock Text="DegradationTime: " />
+                                                            <TextBlock Text="{Binding DegradationTime}" />
+                                                            <TextBlock Text=" ms" />
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2">
+                                                        <TextBlock Foreground="{StaticResource MutedBrush}" Text="目标匹配说明与事件路径" />
+                                                        <TextBlock Margin="0,4,0,8" Text="{Binding MatchDetails}" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding Path}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGrid.RowDetailsTemplate>
                                 </DataGrid>
                             </Grid>
                         </Border>

@@ -23,6 +23,7 @@ $controlNames = @(
     'CountLabelText'
     'MainTabControl'
     'ProcessTimelineTab'
+    'DegradationTab'
     'ErrorBorder'
     'ErrorTextBlock'
     'LastBootValue'
@@ -52,12 +53,19 @@ $controlNames = @(
     'ProcessNegativeOffsetValue'
     'ProcessSnapshotText'
     'ProcessTimelineDataGrid'
+    'DegradationEventCountValue'
+    'DegradationMatchedBootCountValue'
+    'DegradationExactPathCountValue'
+    'DegradationListStatusText'
+    'DegradationDataGrid'
     'FooterStatusText'
 )
 
 $controls = @{}
 $script:StartupItemRows = @()
+$script:StartupItems = @()
 $script:ProcessTimelineLoaded = $false
+$script:DegradationLoaded = $false
 
 foreach ($name in $controlNames) {
     $control = $window.FindName($name)
@@ -76,6 +84,7 @@ if ($ValidateOnly) {
 
 Import-Module (Join-Path $PSScriptRoot 'scripts\BootLens.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'scripts\BootLens.Startup.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'scripts\BootLens.Degradation.psm1') -Force
 
 function Format-Duration {
     param(
@@ -228,6 +237,7 @@ function Apply-StartupItemsFilter {
 
 function Update-StartupItemsView {
     $items = @(Get-BootLensStartupItem)
+    $script:StartupItems = @($items)
     $registryCount = @($items | Where-Object Source -eq 'RegistryRun').Count
     $folderCount = @($items | Where-Object Source -eq 'StartupFolder').Count
     $taskCount = @($items | Where-Object Source -eq 'ScheduledTask').Count
@@ -333,6 +343,76 @@ function Update-ProcessTimelineView {
     $script:ProcessTimelineLoaded = $true
 }
 
+function Update-DegradationView {
+    $selectedCount = [int]$controls.CountComboBox.SelectedItem.Content
+    $scanCount = [Math]::Max(100, $selectedCount * 5)
+    $controls.DegradationListStatusText.Text = 'Reading Windows Event 101...'
+    $report = Get-BootLensDegradationReport `
+        -Count $selectedCount `
+        -ScanEvents $scanCount `
+        -BootCount 100 `
+        -BootScanEvents 1000 `
+        -StartupItems $script:StartupItems
+
+    $controls.DegradationEventCountValue.Text = [string]$report.EventCount
+    $controls.DegradationMatchedBootCountValue.Text = [string]$report.MatchedBootCount
+    $controls.DegradationExactPathCountValue.Text = [string]$report.ExactPathCount
+    $controls.DegradationDataGrid.ItemsSource = @(
+        foreach ($record in $report.Records) {
+            $targetName = if ([string]::IsNullOrWhiteSpace([string]$record.Name)) {
+                'Unknown'
+            }
+            else {
+                [string]$record.Name
+            }
+            if (-not [string]::IsNullOrWhiteSpace([string]$record.FriendlyName)) {
+                $targetName = '{0} - {1}' -f $targetName, $record.FriendlyName
+            }
+
+            $matchLabel = switch ($record.TargetMatchLevel) {
+                'ExactPath' { 'Exact path (current config)' }
+                'FamilyCandidate' { 'App family candidate' }
+                'GenericHost' { 'Generic host' }
+                'Ambiguous' { 'Ambiguous' }
+                default { 'Unmatched' }
+            }
+            $bootLabel = switch ($record.BootAssociationStatus) {
+                'Matched' { 'Matched - Event 100 #{0}' -f $record.BootRecordId }
+                'Ambiguous' { 'Duplicate anchor' }
+                default { 'Unmatched' }
+            }
+            $matchDetail = if ($record.StartupItemMatches.Count -gt 0) {
+                @($record.StartupItemMatches | ForEach-Object {
+                    '{0} ({1})' -f $_.Name, $_.Source
+                }) -join '; '
+            }
+            else {
+                $record.TargetMatchReason
+            }
+
+            [pscustomobject]@{
+                BootStart = if ($null -eq $record.StartTimeUtc) {
+                    'Unknown'
+                }
+                else {
+                    $record.StartTimeUtc.ToLocalTime().ToString('yyyy-MM-dd HH:mm')
+                }
+                EventTime = $record.TimeCreatedUtc.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss.fff')
+                Target = $targetName
+                BootAssociation = $bootLabel
+                TargetMatch = $matchLabel
+                MatchDetails = $matchDetail
+                TotalTime = if ($null -eq $record.TotalTimeMs) { 'Unknown' } else { [string]$record.TotalTimeMs }
+                DegradationTime = if ($null -eq $record.DegradationTimeMs) { 'Unknown' } else { [string]$record.DegradationTimeMs }
+                Path = if ([string]::IsNullOrWhiteSpace([string]$record.Path)) { 'Unknown' } else { $record.Path }
+                EventRecordId = $record.EventRecordId
+            }
+        }
+    )
+    $controls.DegradationListStatusText.Text = 'Showing {0} events' -f $report.EventCount
+    $script:DegradationLoaded = $true
+}
+
 function Update-BootLensView {
     Set-LoadingState -IsLoading $true
     $controls.ErrorBorder.Visibility = [Windows.Visibility]::Collapsed
@@ -370,6 +450,17 @@ function Update-BootLensView {
             }
             catch {
                 $errors.Add("Process timeline discovery failed: $($_.Exception.Message)")
+            }
+        }
+
+        if ($script:DegradationLoaded -or
+            $controls.MainTabControl.SelectedItem -eq $controls.DegradationTab) {
+            try {
+                Update-DegradationView
+            }
+            catch {
+                $controls.DegradationListStatusText.Text = 'Event 101 unavailable'
+                $errors.Add("Startup degradation discovery failed: $($_.Exception.Message)")
             }
         }
 
@@ -420,6 +511,24 @@ $controls.MainTabControl.Add_SelectionChanged({
         catch {
             Show-ErrorMessage -Message $_.Exception.Message
             $controls.FooterStatusText.Text = 'Process timeline unavailable {0:HH:mm:ss}' -f (Get-Date)
+        }
+        finally {
+            Set-LoadingState -IsLoading $false
+        }
+    }
+
+    $isDegradationTab = $controls.MainTabControl.SelectedItem -eq $controls.DegradationTab
+    if ($isDegradationTab -and -not $script:DegradationLoaded) {
+        $controls.ErrorBorder.Visibility = [Windows.Visibility]::Collapsed
+        Set-LoadingState -IsLoading $true
+        try {
+            Update-DegradationView
+            $controls.FooterStatusText.Text = 'Updated {0:HH:mm:ss}' -f (Get-Date)
+        }
+        catch {
+            $controls.DegradationListStatusText.Text = 'Event 101 unavailable'
+            Show-ErrorMessage -Message $_.Exception.Message
+            $controls.FooterStatusText.Text = 'Degradation unavailable {0:HH:mm:ss}' -f (Get-Date)
         }
         finally {
             Set-LoadingState -IsLoading $false
