@@ -1,6 +1,6 @@
 # Process Timeline v1 数据契约
 
-状态：只读 CLI 原型已实现；数据来源和边界已在本机管理员会话验证。
+状态：只读 CLI 与 GUI 页面已实现；数据来源和边界已在本机管理员会话验证，GUI 待实际视觉验收。
 
 ## 1. 定义与范围
 
@@ -57,3 +57,4 @@ BootOffsetMs = Process.CreationTimeUtc - BootRecord.BootStartTimeUtc
 - 单条进程没有有效 `CreationDate` 时保留该进程记录，`CreationTimeStatus` 为 `Unavailable`，时间与偏移为 null。
 - Provider 只读，不结束进程、不启动进程、不修改系统配置。
 - 进程快照不等于启动性能归因；Boot Offset 是进程创建相对时间，不是该进程耗时。
+- GUI 切换到“进程时间线”页时才执行扫描；该页显示运行中进程、可读性汇总、启动时间、偏移和可执行文件路径。

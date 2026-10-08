@@ -1187,6 +1187,7 @@ Phase 1 轻量 GUI 原型已实现
 Phase 2 Registry Run、Startup Folder、Scheduled Tasks 与 Windows Services 启动项发现已实现
 Phase 2 启动项 GUI 页面已实现
 Phase 3 当前进程时间线只读 CLI 原型已实现
+Phase 3 当前进程时间线 GUI 页面已实现
 ```
 
 Phase 0 已经完成：
@@ -1235,10 +1236,11 @@ GUI 原型采用 Windows PowerShell 5.1 + WPF：
 - 关闭窗口后完全退出；
 - 当前用于验证界面信息结构，不代表最终发布技术栈。
 
-GUI 当前包含两个只读页面：
+GUI 当前包含三个只读页面：
 
 - 启动历史：完整启动耗时、阶段构成与最近记录；
-- 启动项：Registry Run、Startup Folder、Scheduled Tasks 与 Windows Services 来源、作用域、目标路径、Publisher、解析状态和启动状态；支持名称/目标搜索及来源筛选。
+- 启动项：Registry Run、Startup Folder、Scheduled Tasks 与 Windows Services 来源、作用域、目标路径、Publisher、解析状态和启动状态；支持名称/目标搜索及来源筛选；
+- 进程时间线：扫描时仍运行的进程、创建时间、Boot Offset 和可执行文件路径；切换到页面时按需读取，管理员权限不足时显示提示。
 
 当前已有 Phase 2 启动项发现 CLI：
 
@@ -1316,7 +1318,7 @@ shutdown /s /t 0 后开机          = 完整启动
 
 当前任务：
 
-> Phase 2 已覆盖 Registry Run、Startup Folder、Scheduled Tasks 与 Windows Services。UWP Startup Tasks 已完成只读评估：本机发现 4 条包清单声明，但没有适用于 BootLens 的受支持全局状态枚举接口，因此暂缓纳入。Phase 3 当前进程快照 Provider 与 CLI 原型已实现；下一步在管理员 PowerShell 中验证本机输出，再决定 GUI 呈现范围。
+> Phase 2 已覆盖 Registry Run、Startup Folder、Scheduled Tasks 与 Windows Services。UWP Startup Tasks 已完成只读评估：本机发现 4 条包清单声明，但没有适用于 BootLens 的受支持全局状态枚举接口，因此暂缓纳入。Phase 3 当前进程快照 Provider、CLI 与 GUI 页面已实现；下一步完成 GUI 本机视觉与交互验收。
 
 ---
 

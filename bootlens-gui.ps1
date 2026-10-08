@@ -20,6 +20,9 @@ $window = [Windows.Markup.XamlReader]::Load($reader)
 $controlNames = @(
     'CountComboBox'
     'RefreshButton'
+    'CountLabelText'
+    'MainTabControl'
+    'ProcessTimelineTab'
     'ErrorBorder'
     'ErrorTextBlock'
     'LastBootValue'
@@ -43,11 +46,18 @@ $controlNames = @(
     'StartupSearchTextBox'
     'StartupSourceFilterComboBox'
     'StartupItemsDataGrid'
+    'ProcessTotalValue'
+    'ProcessTimestampedValue'
+    'ProcessUnavailableValue'
+    'ProcessNegativeOffsetValue'
+    'ProcessSnapshotText'
+    'ProcessTimelineDataGrid'
     'FooterStatusText'
 )
 
 $controls = @{}
 $script:StartupItemRows = @()
+$script:ProcessTimelineLoaded = $false
 
 foreach ($name in $controlNames) {
     $control = $window.FindName($name)
@@ -282,6 +292,47 @@ function Update-StartupItemsView {
     Apply-StartupItemsFilter
 }
 
+function Update-ProcessTimelineView {
+    $report = Get-BootLensProcessTimeline
+    $controls.ProcessTotalValue.Text = [string]$report.ProcessCount
+    $controls.ProcessTimestampedValue.Text = [string]$report.TimestampedCount
+    $controls.ProcessUnavailableValue.Text = [string]$report.UnavailableCount
+    $controls.ProcessNegativeOffsetValue.Text = [string]$report.NegativeOffsetCount
+    $controls.ProcessSnapshotText.Text = 'Boot {0} · Snapshot {1}' -f `
+        $report.BootStartTimeUtc.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss'),
+        $report.SnapshotTimeUtc.ToLocalTime().ToString('HH:mm:ss')
+
+    $controls.ProcessTimelineDataGrid.ItemsSource = @(
+        foreach ($process in $report.Processes) {
+            [pscustomobject]@{
+                Name = $process.Name
+                ProcessId = $process.ProcessId
+                ParentProcessId = if ($null -eq $process.ParentProcessId) { 'Unknown' } else { $process.ParentProcessId }
+                Started = if ($null -eq $process.CreationTimeUtc) {
+                    'Unknown'
+                }
+                else {
+                    $process.CreationTimeUtc.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss.fff')
+                }
+                BootOffset = if ($null -eq $process.BootOffsetMs) {
+                    'Unknown'
+                }
+                else {
+                    '{0:+0.000;-0.000;0.000} s' -f ($process.BootOffsetMs / 1000.0)
+                }
+                ExecutablePath = if ([string]::IsNullOrWhiteSpace([string]$process.ExecutablePath)) {
+                    'Unknown'
+                }
+                else {
+                    $process.ExecutablePath
+                }
+            }
+        }
+    )
+
+    $script:ProcessTimelineLoaded = $true
+}
+
 function Update-BootLensView {
     Set-LoadingState -IsLoading $true
     $controls.ErrorBorder.Visibility = [Windows.Visibility]::Collapsed
@@ -312,6 +363,16 @@ function Update-BootLensView {
             $errors.Add("Startup item discovery failed: $($_.Exception.Message)")
         }
 
+        if ($script:ProcessTimelineLoaded -or
+            $controls.MainTabControl.SelectedItem -eq $controls.ProcessTimelineTab) {
+            try {
+                Update-ProcessTimelineView
+            }
+            catch {
+                $errors.Add("Process timeline discovery failed: $($_.Exception.Message)")
+            }
+        }
+
         if ($errors.Count -gt 0) {
             Show-ErrorMessage -Message ($errors -join ([Environment]::NewLine + [Environment]::NewLine))
             $controls.FooterStatusText.Text = 'Updated with errors {0:HH:mm:ss}' -f (Get-Date)
@@ -329,6 +390,42 @@ Set-SelectedCount -Value $Count
 $controls.RefreshButton.Add_Click({ Update-BootLensView })
 $controls.StartupSearchTextBox.Add_TextChanged({ Apply-StartupItemsFilter })
 $controls.StartupSourceFilterComboBox.Add_SelectionChanged({ Apply-StartupItemsFilter })
+$controls.MainTabControl.Add_SelectionChanged({
+    if ($_.Source -ne $controls.MainTabControl) {
+        return
+    }
+
+    $isProcessTimelineTab = $controls.MainTabControl.SelectedItem -eq $controls.ProcessTimelineTab
+    $controls.CountLabelText.Visibility = if ($isProcessTimelineTab) {
+        [Windows.Visibility]::Collapsed
+    }
+    else {
+        [Windows.Visibility]::Visible
+    }
+    $controls.CountComboBox.Visibility = if ($isProcessTimelineTab) {
+        [Windows.Visibility]::Collapsed
+    }
+    else {
+        [Windows.Visibility]::Visible
+    }
+
+    if ($isProcessTimelineTab -and -not $script:ProcessTimelineLoaded) {
+        $controls.ErrorBorder.Visibility = [Windows.Visibility]::Collapsed
+        $controls.FooterStatusText.Text = 'Reading current process snapshot...'
+        Set-LoadingState -IsLoading $true
+        try {
+            Update-ProcessTimelineView
+            $controls.FooterStatusText.Text = 'Updated {0:HH:mm:ss}' -f (Get-Date)
+        }
+        catch {
+            Show-ErrorMessage -Message $_.Exception.Message
+            $controls.FooterStatusText.Text = 'Process timeline unavailable {0:HH:mm:ss}' -f (Get-Date)
+        }
+        finally {
+            Set-LoadingState -IsLoading $false
+        }
+    }
+})
 $window.Add_ContentRendered({ Update-BootLensView })
 
 $null = $window.ShowDialog()

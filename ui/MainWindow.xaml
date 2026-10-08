@@ -65,11 +65,12 @@
                         Margin="0,5,0,0"
                         Foreground="#9CA3AF"
                         FontSize="13"
-                        Text="Windows 完整启动历史 · Windows 原生测量数据" />
+                        Text="Windows 启动历史 · 启动项发现 · 进程时间线" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock
+                        x:Name="CountLabelText"
                         Margin="0,0,8,0"
                         VerticalAlignment="Center"
                         Foreground="#D1D5DB"
@@ -106,7 +107,7 @@
                 TextWrapping="Wrap" />
         </Border>
 
-        <TabControl Grid.Row="2" Background="Transparent" BorderThickness="0">
+        <TabControl x:Name="MainTabControl" Grid.Row="2" Background="Transparent" BorderThickness="0">
             <TabItem Header="启动历史">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="24,20,12,24">
@@ -451,6 +452,125 @@
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
+
+            <TabItem x:Name="ProcessTimelineTab" Header="进程时间线">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="24,20,12,24">
+                        <UniformGrid Columns="4" Margin="0,0,0,20">
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource MutedBrush}" Text="运行中进程" />
+                                    <TextBlock
+                                        x:Name="ProcessTotalValue"
+                                        Margin="0,8,0,0"
+                                        Foreground="{StaticResource HeadingBrush}"
+                                        FontSize="28"
+                                        FontWeight="Bold"
+                                        Text="--" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource MutedBrush}" Text="时间戳可读" />
+                                    <TextBlock
+                                        x:Name="ProcessTimestampedValue"
+                                        Margin="0,8,0,0"
+                                        Foreground="#059669"
+                                        FontSize="28"
+                                        FontWeight="Bold"
+                                        Text="--" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource MutedBrush}" Text="时间不可用" />
+                                    <TextBlock
+                                        x:Name="ProcessUnavailableValue"
+                                        Margin="0,8,0,0"
+                                        Foreground="#B45309"
+                                        FontSize="28"
+                                        FontWeight="Bold"
+                                        Text="--" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource MutedBrush}" Text="早于启动锚点" />
+                                    <TextBlock
+                                        x:Name="ProcessNegativeOffsetValue"
+                                        Margin="0,8,0,0"
+                                        Foreground="#7C3AED"
+                                        FontSize="28"
+                                        FontWeight="Bold"
+                                        Text="--" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+
+                        <Border
+                            Margin="0,0,12,20"
+                            Padding="16,12"
+                            Background="#EFF6FF"
+                            BorderBrush="#BFDBFE"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                            <TextBlock
+                                Foreground="#1E3A8A"
+                                Text="这里是扫描时仍在运行的进程快照，不包含已退出进程的历史记录。Boot Offset 是进程创建时间相对完整启动锚点的时间，允许出现小幅负值。需要管理员权限。"
+                                TextWrapping="Wrap" />
+                        </Border>
+
+                        <Border Margin="0,0,12,0" Style="{StaticResource CardStyle}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,14">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock
+                                        Foreground="{StaticResource HeadingBrush}"
+                                        FontSize="17"
+                                        FontWeight="SemiBold"
+                                        Text="当前启动进程" />
+                                    <TextBlock
+                                        x:Name="ProcessSnapshotText"
+                                        Grid.Column="1"
+                                        Foreground="{StaticResource MutedBrush}"
+                                        Text="尚未扫描" />
+                                </Grid>
+                                <DataGrid
+                                    x:Name="ProcessTimelineDataGrid"
+                                    Grid.Row="1"
+                                    AutoGenerateColumns="False"
+                                    BorderThickness="0"
+                                    CanUserAddRows="False"
+                                    CanUserDeleteRows="False"
+                                    CanUserReorderColumns="False"
+                                    CanUserResizeRows="False"
+                                    HeadersVisibility="Column"
+                                    IsReadOnly="True"
+                                    RowHeaderWidth="0"
+                                    SelectionMode="Single"
+                                    GridLinesVisibility="Horizontal"
+                                    HorizontalGridLinesBrush="#E5E7EB">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Width="1.5*" Binding="{Binding Name}" Header="进程" />
+                                        <DataGridTextColumn Width="0.7*" Binding="{Binding ProcessId}" Header="PID" />
+                                        <DataGridTextColumn Width="0.8*" Binding="{Binding ParentProcessId}" Header="父 PID" />
+                                        <DataGridTextColumn Width="1.4*" Binding="{Binding Started}" Header="启动时间" />
+                                        <DataGridTextColumn Width="1*" Binding="{Binding BootOffset}" Header="Boot Offset" />
+                                        <DataGridTextColumn Width="3*" Binding="{Binding ExecutablePath}" Header="可执行文件" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
         </TabControl>
 
         <Border Grid.Row="3" Padding="24,11" Background="#E5E7EB">
@@ -462,7 +582,7 @@
                 <TextBlock
                     Foreground="{StaticResource MutedBrush}"
                     FontSize="12"
-                    Text="数据来源：Windows Event Log、Registry Run、Startup Folder、Scheduled Tasks、Windows Services · 全程只读" />
+                    Text="数据来源：Windows Event Log、启动项配置、Win32_Process · 全程只读" />
                 <TextBlock
                     x:Name="FooterStatusText"
                     Grid.Column="1"
