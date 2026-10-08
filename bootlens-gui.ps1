@@ -73,8 +73,12 @@ $controlNames = @(
 $controls = @{}
 $script:StartupItemRows = @()
 $script:StartupItems = @()
+$script:StartupItemsLoaded = $false
 $script:ProcessTimelineLoaded = $false
+$script:ProcessTimelineLoading = $false
 $script:DegradationLoaded = $false
+$script:DegradationLoading = $false
+$script:PageQueries = @{}
 
 foreach ($name in $controlNames) {
     $control = $window.FindName($name)
@@ -141,7 +145,28 @@ function Get-ParentScrollViewer {
     return $null
 }
 
-function Forward-ProcessTimelineMouseWheel {
+function Get-DescendantScrollViewer {
+    param(
+        [Parameter(Mandatory)]
+        [Windows.DependencyObject]$Element
+    )
+
+    for ($index = 0; $index -lt [Windows.Media.VisualTreeHelper]::GetChildrenCount($Element); $index++) {
+        $child = [Windows.Media.VisualTreeHelper]::GetChild($Element, $index)
+        if ($child -is [Windows.Controls.ScrollViewer]) {
+            return $child
+        }
+
+        $nestedScrollViewer = Get-DescendantScrollViewer -Element $child
+        if ($null -ne $nestedScrollViewer) {
+            return $nestedScrollViewer
+        }
+    }
+
+    return $null
+}
+
+function Forward-DataGridMouseWheel {
     param(
         [Parameter(Mandatory)]
         [object]$Sender,
@@ -150,14 +175,29 @@ function Forward-ProcessTimelineMouseWheel {
         [Windows.Input.MouseWheelEventArgs]$EventArgs
     )
 
-    $scrollViewer = Get-ParentScrollViewer -Element $Sender
-    if ($null -eq $scrollViewer) {
+    $pageScrollViewer = Get-ParentScrollViewer -Element $Sender
+    if ($null -eq $pageScrollViewer -or $pageScrollViewer.ScrollableHeight -le 0) {
         return
     }
 
-    # The DataGrid is measured inside a StackPanel and may have no internal
-    # scroll range. Forward wheel movement to the page's outer ScrollViewer.
-    $scrollViewer.ScrollToVerticalOffset($scrollViewer.VerticalOffset - $EventArgs.Delta)
+    $gridScrollViewer = Get-DescendantScrollViewer -Element $Sender
+    $atGridBoundary = $true
+    if ($null -ne $gridScrollViewer -and $gridScrollViewer.ScrollableHeight -gt 0) {
+        $atGridBoundary = if ($EventArgs.Delta -lt 0) {
+            $gridScrollViewer.VerticalOffset -ge ($gridScrollViewer.ScrollableHeight - 1)
+        }
+        else {
+            $gridScrollViewer.VerticalOffset -le 0
+        }
+    }
+
+    if (-not $atGridBoundary) {
+        return
+    }
+
+    # Let the grid scroll its virtualized rows first, then pass wheel movement
+    # to the page when the grid reaches its top or bottom.
+    $pageScrollViewer.ScrollToVerticalOffset($pageScrollViewer.VerticalOffset - $EventArgs.Delta)
     $EventArgs.Handled = $true
 }
 
@@ -614,10 +654,18 @@ function Update-StartupItemsView {
     )
 
     Apply-StartupItemsFilter
+    $script:StartupItemsLoaded = $true
 }
 
 function Update-ProcessTimelineView {
-    $report = Get-BootLensProcessTimeline
+    param(
+        [object]$Report
+    )
+
+    if ($null -eq $Report) {
+        $report = Get-BootLensProcessTimeline
+    }
+
     $controls.ProcessTimelineStatusBorder.Visibility = [Windows.Visibility]::Collapsed
     $controls.ProcessTotalValue.Text = [string]$report.ProcessCount
     $controls.ProcessTimestampedValue.Text = [string]$report.TimestampedCount
@@ -659,15 +707,20 @@ function Update-ProcessTimelineView {
 }
 
 function Update-DegradationView {
-    $selectedCount = [int]$controls.CountComboBox.SelectedItem.Content
-    $scanCount = [Math]::Max(100, $selectedCount * 5)
-    $controls.DegradationListStatusText.Text = 'Reading Windows Event 101...'
-    $report = Get-BootLensDegradationReport `
-        -Count $selectedCount `
-        -ScanEvents $scanCount `
-        -BootCount 100 `
-        -BootScanEvents 1000 `
-        -StartupItems $script:StartupItems
+    param(
+        [object]$Report
+    )
+
+    if ($null -eq $Report) {
+        $selectedCount = [int]$controls.CountComboBox.SelectedItem.Content
+        $scanCount = [Math]::Max(100, $selectedCount * 5)
+        $report = Get-BootLensDegradationReport `
+            -Count $selectedCount `
+            -ScanEvents $scanCount `
+            -BootCount 100 `
+            -BootScanEvents 1000 `
+            -StartupItems $script:StartupItems
+    }
 
     $controls.DegradationStatusBorder.Visibility = [Windows.Visibility]::Collapsed
 
@@ -753,8 +806,7 @@ function Update-BootLensView {
             $errors.Add("Startup item discovery failed: $($_.Exception.Message)")
         }
 
-        if ($script:ProcessTimelineLoaded -or
-            $controls.MainTabControl.SelectedItem -eq $controls.ProcessTimelineTab) {
+        if ($script:ProcessTimelineLoaded -and -not $script:ProcessTimelineLoading) {
             try {
                 Update-ProcessTimelineView
             }
@@ -765,8 +817,7 @@ function Update-BootLensView {
             }
         }
 
-        if ($script:DegradationLoaded -or
-            $controls.MainTabControl.SelectedItem -eq $controls.DegradationTab) {
+        if ($script:DegradationLoaded -and -not $script:DegradationLoading) {
             try {
                 Update-DegradationView
             }
@@ -777,6 +828,8 @@ function Update-BootLensView {
             }
         }
 
+        Start-SelectedPageQuery
+
         if ($errors.Count -gt 0) {
             Show-ErrorMessage -Message ($errors -join ([Environment]::NewLine + [Environment]::NewLine))
             $controls.FooterStatusText.Text = 'Updated with errors {0:HH:mm:ss}' -f (Get-Date)
@@ -786,20 +839,218 @@ function Update-BootLensView {
         }
     }
     finally {
-        Set-LoadingState -IsLoading $false
+        Set-LoadingState -IsLoading ($script:PageQueries.Count -gt 0)
+    }
+}
+
+function Start-PageReportQuery {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('ProcessTimeline', 'Degradation')]
+        [string]$PageName
+    )
+
+    if ($script:PageQueries.ContainsKey($PageName)) {
+        return
+    }
+
+    $selectedCount = [int]$controls.CountComboBox.SelectedItem.Content
+    $startupItems = @($script:StartupItems)
+    $workerScript = {
+        param(
+            [string]$ProjectRoot,
+            [string]$QueryPage,
+            [int]$Count,
+            [object[]]$StartupItems
+        )
+
+        $ErrorActionPreference = 'Stop'
+        Import-Module (Join-Path $ProjectRoot 'scripts\BootLens.psm1') -Force
+        Import-Module (Join-Path $ProjectRoot 'scripts\BootLens.Degradation.psm1') -Force
+
+        try {
+            $report = if ($QueryPage -eq 'ProcessTimeline') {
+                Get-BootLensProcessTimeline -ScanEvents 100 -OperationTimeoutSec 15
+            }
+            else {
+                Get-BootLensDegradationReport `
+                    -Count $Count `
+                    -ScanEvents ([Math]::Max(100, $Count * 5)) `
+                    -BootCount 100 `
+                    -BootScanEvents 1000 `
+                    -StartupItems $StartupItems
+            }
+
+            [pscustomobject]@{
+                Succeeded = $true
+                Report = $report
+                ErrorMessage = $null
+            }
+        }
+        catch {
+            [pscustomobject]@{
+                Succeeded = $false
+                Report = $null
+                ErrorMessage = $_.Exception.Message
+            }
+        }
+    }
+
+    $runspace = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace()
+    $runspace.ApartmentState = [System.Threading.ApartmentState]::MTA
+    $runspace.ThreadOptions = [System.Management.Automation.Runspaces.PSThreadOptions]::ReuseThread
+    $runspace.Open()
+
+    $powerShell = [PowerShell]::Create()
+    $powerShell.Runspace = $runspace
+    $null = $powerShell.AddScript($workerScript.ToString())
+    $null = $powerShell.AddArgument($PSScriptRoot)
+    $null = $powerShell.AddArgument($PageName)
+    $null = $powerShell.AddArgument($selectedCount)
+    $null = $powerShell.AddArgument($startupItems)
+
+    try {
+        $asyncResult = $powerShell.BeginInvoke()
+    }
+    catch {
+        $powerShell.Dispose()
+        $runspace.Dispose()
+        throw
+    }
+
+    $script:PageQueries[$PageName] = @{
+        PowerShell = $powerShell
+        Runspace = $runspace
+        AsyncResult = $asyncResult
+    }
+}
+
+function Complete-PageReportQuery {
+    param(
+        [Parameter(Mandatory)]
+        [string]$PageName,
+
+        [Parameter(Mandatory)]
+        [hashtable]$Query
+    )
+
+    try {
+        $output = @($Query.PowerShell.EndInvoke($Query.AsyncResult))
+        if ($output.Count -eq 0) {
+            throw 'The background query returned no result.'
+        }
+
+        $result = $output[-1]
+        if (-not $result.Succeeded) {
+            throw $result.ErrorMessage
+        }
+
+        if ($PageName -eq 'ProcessTimeline') {
+            Update-ProcessTimelineView -Report $result.Report
+        }
+        else {
+            Update-DegradationView -Report $result.Report
+        }
+
+        $controls.FooterStatusText.Text = 'Updated {0:HH:mm:ss}' -f (Get-Date)
+    }
+    catch {
+        $message = if ($PageName -eq 'ProcessTimeline') {
+            Get-PageFailureMessage -PageName '进程时间线' -Message $_.Exception.Message
+        }
+        else {
+            Get-PageFailureMessage -PageName '启动退化' -Message $_.Exception.Message
+        }
+
+        if ($PageName -eq 'ProcessTimeline') {
+            Set-ProcessTimelineUnavailable -Message $message
+        }
+        else {
+            Set-DegradationUnavailable -Message $message
+        }
+
+        Show-ErrorMessage -Message $message
+        $controls.FooterStatusText.Text = '{0} unavailable {1:HH:mm:ss}' -f $PageName, (Get-Date)
+    }
+    finally {
+        $null = $script:PageQueries.Remove($PageName)
+        $Query.PowerShell.Dispose()
+        $Query.Runspace.Dispose()
+        $script:ProcessTimelineLoading = $script:PageQueries.ContainsKey('ProcessTimeline')
+        $script:DegradationLoading = $script:PageQueries.ContainsKey('Degradation')
+        Set-LoadingState -IsLoading ($script:PageQueries.Count -gt 0)
+    }
+}
+
+function Start-SelectedPageQuery {
+    $isProcessTimelineTab = $controls.MainTabControl.SelectedItem -eq $controls.ProcessTimelineTab
+    if ($isProcessTimelineTab -and
+        -not $script:ProcessTimelineLoaded -and
+        -not $script:ProcessTimelineLoading) {
+        $controls.ErrorBorder.Visibility = [Windows.Visibility]::Collapsed
+        $controls.FooterStatusText.Text = 'Reading current process snapshot...'
+        $controls.ProcessSnapshotText.Text = 'Scanning current processes...'
+        $script:ProcessTimelineLoading = $true
+        Set-LoadingState -IsLoading $true
+        try {
+            Start-PageReportQuery -PageName 'ProcessTimeline'
+        }
+        catch {
+            $message = Get-PageFailureMessage -PageName '进程时间线' -Message $_.Exception.Message
+            Set-ProcessTimelineUnavailable -Message $message
+            Show-ErrorMessage -Message $message
+            $controls.FooterStatusText.Text = 'Process timeline unavailable {0:HH:mm:ss}' -f (Get-Date)
+            $script:ProcessTimelineLoading = $false
+            Set-LoadingState -IsLoading ($script:PageQueries.Count -gt 0)
+        }
+    }
+
+    $isDegradationTab = $controls.MainTabControl.SelectedItem -eq $controls.DegradationTab
+    if ($isDegradationTab -and
+        -not $script:StartupItemsLoaded -and
+        -not $script:DegradationLoaded) {
+        $controls.DegradationListStatusText.Text = 'Waiting for startup configuration...'
+    }
+
+    if ($isDegradationTab -and
+        $script:StartupItemsLoaded -and
+        -not $script:DegradationLoaded -and
+        -not $script:DegradationLoading) {
+        $controls.ErrorBorder.Visibility = [Windows.Visibility]::Collapsed
+        $controls.DegradationListStatusText.Text = 'Reading Windows Event 101...'
+        $script:DegradationLoading = $true
+        Set-LoadingState -IsLoading $true
+        try {
+            Start-PageReportQuery -PageName 'Degradation'
+        }
+        catch {
+            $message = Get-PageFailureMessage -PageName '启动退化' -Message $_.Exception.Message
+            Set-DegradationUnavailable -Message $message
+            Show-ErrorMessage -Message $message
+            $controls.FooterStatusText.Text = 'Degradation unavailable {0:HH:mm:ss}' -f (Get-Date)
+            $script:DegradationLoading = $false
+            Set-LoadingState -IsLoading ($script:PageQueries.Count -gt 0)
+        }
     }
 }
 
 Set-SelectedCount -Value $Count
-$processTimelineMouseWheelHandler = [Windows.Input.MouseWheelEventHandler]{
+$dataGridMouseWheelHandler = [Windows.Input.MouseWheelEventHandler]{
     param($sender, $eventArgs)
-    Forward-ProcessTimelineMouseWheel -Sender $sender -EventArgs $eventArgs
+    Forward-DataGridMouseWheel -Sender $sender -EventArgs $eventArgs
 }
-$controls.ProcessTimelineDataGrid.AddHandler(
-    [Windows.UIElement]::PreviewMouseWheelEvent,
-    $processTimelineMouseWheelHandler,
-    $true
-)
+foreach ($dataGrid in @(
+    $controls.HistoryDataGrid,
+    $controls.StartupItemsDataGrid,
+    $controls.ProcessTimelineDataGrid,
+    $controls.DegradationDataGrid
+)) {
+    $dataGrid.AddHandler(
+        [Windows.UIElement]::PreviewMouseWheelEvent,
+        $dataGridMouseWheelHandler,
+        $true
+    )
+}
 $rowDetailsToggleHandler = [Windows.Input.MouseButtonEventHandler]{
     param($sender, $eventArgs)
     Toggle-DataGridRowDetails -DataGrid $sender -EventArgs $eventArgs
@@ -814,6 +1065,17 @@ $controls.DegradationDataGrid.AddHandler(
     $rowDetailsToggleHandler,
     $true
 )
+$script:PageQueryTimer = New-Object Windows.Threading.DispatcherTimer
+$script:PageQueryTimer.Interval = [TimeSpan]::FromMilliseconds(100)
+$script:PageQueryTimer.Add_Tick({
+    foreach ($pageName in @($script:PageQueries.Keys)) {
+        $query = $script:PageQueries[$pageName]
+        if ($query.AsyncResult.IsCompleted) {
+            Complete-PageReportQuery -PageName $pageName -Query $query
+        }
+    }
+})
+$script:PageQueryTimer.Start()
 $controls.RefreshButton.Add_Click({ Update-BootLensView })
 $controls.StartupSearchTextBox.Add_TextChanged({ Apply-StartupItemsFilter })
 $controls.StartupSourceFilterComboBox.Add_SelectionChanged({ Apply-StartupItemsFilter })
@@ -836,44 +1098,30 @@ $controls.MainTabControl.Add_SelectionChanged({
         [Windows.Visibility]::Visible
     }
 
-    if ($isProcessTimelineTab -and -not $script:ProcessTimelineLoaded) {
-        $controls.ErrorBorder.Visibility = [Windows.Visibility]::Collapsed
-        $controls.FooterStatusText.Text = 'Reading current process snapshot...'
-        Set-LoadingState -IsLoading $true
-        try {
-            Update-ProcessTimelineView
-            $controls.FooterStatusText.Text = 'Updated {0:HH:mm:ss}' -f (Get-Date)
-        }
-        catch {
-            $message = Get-PageFailureMessage -PageName '进程时间线' -Message $_.Exception.Message
-            Set-ProcessTimelineUnavailable -Message $message
-            Show-ErrorMessage -Message $message
-            $controls.FooterStatusText.Text = 'Process timeline unavailable {0:HH:mm:ss}' -f (Get-Date)
-        }
-        finally {
-            Set-LoadingState -IsLoading $false
-        }
-    }
-
-    $isDegradationTab = $controls.MainTabControl.SelectedItem -eq $controls.DegradationTab
-    if ($isDegradationTab -and -not $script:DegradationLoaded) {
-        $controls.ErrorBorder.Visibility = [Windows.Visibility]::Collapsed
-        Set-LoadingState -IsLoading $true
-        try {
-            Update-DegradationView
-            $controls.FooterStatusText.Text = 'Updated {0:HH:mm:ss}' -f (Get-Date)
-        }
-        catch {
-            $message = Get-PageFailureMessage -PageName '启动退化' -Message $_.Exception.Message
-            Set-DegradationUnavailable -Message $message
-            Show-ErrorMessage -Message $message
-            $controls.FooterStatusText.Text = 'Degradation unavailable {0:HH:mm:ss}' -f (Get-Date)
-        }
-        finally {
-            Set-LoadingState -IsLoading $false
-        }
-    }
+    Start-SelectedPageQuery
 })
-$window.Add_ContentRendered({ Update-BootLensView })
+$window.Add_ContentRendered({
+    $null = $window.Dispatcher.BeginInvoke(
+        [Windows.Threading.DispatcherPriority]::Background,
+        [Action]{ Update-BootLensView }
+    )
+})
 
-$null = $window.ShowDialog()
+try {
+    $null = $window.ShowDialog()
+}
+finally {
+    $script:PageQueryTimer.Stop()
+    foreach ($query in @($script:PageQueries.Values)) {
+        try {
+            $query.PowerShell.Stop()
+        }
+        catch {
+        }
+
+        $query.PowerShell.Dispose()
+        $query.Runspace.Dispose()
+    }
+
+    $script:PageQueries.Clear()
+}

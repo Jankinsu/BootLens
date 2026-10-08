@@ -310,6 +310,11 @@
 
                         <DataGrid
                             x:Name="HistoryDataGrid"
+                            MaxHeight="520"
+                            EnableRowVirtualization="True"
+                            ScrollViewer.CanContentScroll="True"
+                            VirtualizingPanel.IsVirtualizing="True"
+                            VirtualizingPanel.VirtualizationMode="Recycling"
                             Grid.Row="1"
                             AutoGenerateColumns="False"
                             BorderThickness="0"
@@ -493,6 +498,11 @@
 
                                 <DataGrid
                                     x:Name="StartupItemsDataGrid"
+                                    MaxHeight="520"
+                                    EnableRowVirtualization="True"
+                                    ScrollViewer.CanContentScroll="True"
+                                    VirtualizingPanel.IsVirtualizing="True"
+                                    VirtualizingPanel.VirtualizationMode="Recycling"
                                     Grid.Row="2"
                                     AutoGenerateColumns="False"
                                     BorderThickness="0"
@@ -624,6 +634,11 @@
                                 </Grid>
                                 <DataGrid
                                     x:Name="ProcessTimelineDataGrid"
+                                    MaxHeight="520"
+                                    EnableRowVirtualization="True"
+                                    ScrollViewer.CanContentScroll="True"
+                                    VirtualizingPanel.IsVirtualizing="True"
+                                    VirtualizingPanel.VirtualizationMode="Recycling"
                                     Grid.Row="1"
                                     AutoGenerateColumns="False"
                                     BorderThickness="0"
@@ -741,6 +756,11 @@
                                 </Grid>
                                 <DataGrid
                                     x:Name="DegradationDataGrid"
+                                    MaxHeight="520"
+                                    EnableRowVirtualization="True"
+                                    ScrollViewer.CanContentScroll="True"
+                                    VirtualizingPanel.IsVirtualizing="True"
+                                    VirtualizingPanel.VirtualizationMode="Recycling"
                                     Grid.Row="1"
                                     AutoGenerateColumns="False"
                                     BorderThickness="0"
