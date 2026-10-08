@@ -1,6 +1,6 @@
 # Phase 4 启动性能关联：数据验证
 
-状态：GUI 展示及管理员 GUI 本机数据渲染已由用户确认；普通权限下 Event 101 权限提示也已确认；PowerShell 测试套件已通过。已取得最近 20 条摘要及代表性原始样本；Event ID 101 的 `StartTime` 在 3 次启动中与 Event ID 100 `BootStartTime` 精确匹配。`DegradationTime` 的计算公式及更广目标覆盖仍未验证，因此只展示原始字段，不派生影响时间。
+状态：GUI 展示、管理员权限下各页面数据读取及普通权限下 Event 101 权限提示均已由用户确认；PowerShell 测试套件已通过。启动退化详情再次点击收起的交互待验收。已取得最近 20 条摘要及代表性原始样本；Event ID 101 的 `StartTime` 在 3 次启动中与 Event ID 100 `BootStartTime` 精确匹配。`DegradationTime` 的计算公式及更广目标覆盖仍未验证，因此只展示原始字段，不派生影响时间。
 
 ## 验证目标
 

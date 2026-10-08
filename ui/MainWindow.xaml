@@ -634,6 +634,7 @@
                                     HeadersVisibility="Column"
                                     IsReadOnly="True"
                                     RowHeaderWidth="0"
+                                    RowDetailsVisibilityMode="VisibleWhenSelected"
                                     SelectionMode="Single"
                                     GridLinesVisibility="Horizontal"
                                     HorizontalGridLinesBrush="#E5E7EB">
@@ -643,8 +644,41 @@
                                         <DataGridTextColumn Width="0.8*" Binding="{Binding ParentProcessId}" Header="父 PID" />
                                         <DataGridTextColumn Width="1.4*" Binding="{Binding Started}" Header="启动时间" />
                                         <DataGridTextColumn Width="1*" Binding="{Binding BootOffset}" Header="Boot Offset" />
-                                        <DataGridTextColumn Width="3*" Binding="{Binding ExecutablePath}" Header="可执行文件" />
+                                        <DataGridTextColumn Width="3*" Binding="{Binding ExecutablePath}" Header="可执行文件">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                                    <Setter Property="ToolTip" Value="{Binding ExecutablePath}" />
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
                                     </DataGrid.Columns>
+                                    <DataGrid.RowDetailsTemplate>
+                                        <DataTemplate>
+                                            <Border
+                                                Padding="12,10"
+                                                Background="#F9FAFB"
+                                                BorderBrush="#E5E7EB"
+                                                BorderThickness="0,1,0,0">
+                                                <StackPanel>
+                                                    <TextBlock
+                                                        Margin="0,0,0,6"
+                                                        Foreground="{StaticResource MutedBrush}"
+                                                        FontSize="12"
+                                                        Text="完整可执行文件路径（可选择并复制）" />
+                                                    <TextBox
+                                                        MaxHeight="100"
+                                                        MinHeight="34"
+                                                        AcceptsReturn="True"
+                                                        HorizontalScrollBarVisibility="Disabled"
+                                                        IsReadOnly="True"
+                                                        Text="{Binding ExecutablePath, Mode=OneWay}"
+                                                        TextWrapping="Wrap"
+                                                        VerticalScrollBarVisibility="Auto" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGrid.RowDetailsTemplate>
                                 </DataGrid>
                             </Grid>
                         </Border>

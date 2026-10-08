@@ -118,6 +118,104 @@ function Set-SelectedCount {
     }
 }
 
+function Get-ParentScrollViewer {
+    param(
+        [Parameter(Mandatory)]
+        [Windows.DependencyObject]$Element
+    )
+
+    $current = [Windows.Media.VisualTreeHelper]::GetParent($Element)
+    while ($null -ne $current) {
+        if ($current -is [Windows.Controls.ScrollViewer]) {
+            return $current
+        }
+
+        if ($current -is [Windows.ContentElement]) {
+            $current = [Windows.ContentOperations]::GetParent($current)
+        }
+        else {
+            $current = [Windows.Media.VisualTreeHelper]::GetParent($current)
+        }
+    }
+
+    return $null
+}
+
+function Forward-ProcessTimelineMouseWheel {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Sender,
+
+        [Parameter(Mandatory)]
+        [Windows.Input.MouseWheelEventArgs]$EventArgs
+    )
+
+    $scrollViewer = Get-ParentScrollViewer -Element $Sender
+    if ($null -eq $scrollViewer) {
+        return
+    }
+
+    # The DataGrid is measured inside a StackPanel and may have no internal
+    # scroll range. Forward wheel movement to the page's outer ScrollViewer.
+    $scrollViewer.ScrollToVerticalOffset($scrollViewer.VerticalOffset - $EventArgs.Delta)
+    $EventArgs.Handled = $true
+}
+
+function Get-VisualAncestorOfType {
+    param(
+        [Parameter(Mandatory)]
+        [Windows.DependencyObject]$Element,
+
+        [Parameter(Mandatory)]
+        [type]$AncestorType
+    )
+
+    $current = $Element
+    while ($null -ne $current) {
+        if ($AncestorType.IsInstanceOfType($current)) {
+            return $current
+        }
+
+        if ($current -is [Windows.ContentElement]) {
+            $current = [Windows.ContentOperations]::GetParent($current)
+        }
+        else {
+            $current = [Windows.Media.VisualTreeHelper]::GetParent($current)
+        }
+    }
+
+    return $null
+}
+
+function Toggle-DataGridRowDetails {
+    param(
+        [Parameter(Mandatory)]
+        [Windows.Controls.DataGrid]$DataGrid,
+
+        [Parameter(Mandatory)]
+        [Windows.Input.MouseButtonEventArgs]$EventArgs
+    )
+
+    $detailsPresenterType = [Windows.Controls.Primitives.DataGridDetailsPresenter]
+    $detailsPresenter = Get-VisualAncestorOfType `
+        -Element $EventArgs.OriginalSource `
+        -AncestorType $detailsPresenterType
+    if ($null -ne $detailsPresenter) {
+        return
+    }
+
+    $row = Get-VisualAncestorOfType `
+        -Element $EventArgs.OriginalSource `
+        -AncestorType ([Windows.Controls.DataGridRow])
+    if ($null -eq $row -or
+        -not [object]::ReferenceEquals($DataGrid.SelectedItem, $row.Item)) {
+        return
+    }
+
+    $DataGrid.SelectedItem = $null
+    $EventArgs.Handled = $true
+}
+
 function Set-LoadingState {
     param(
         [Parameter(Mandatory)]
@@ -693,6 +791,29 @@ function Update-BootLensView {
 }
 
 Set-SelectedCount -Value $Count
+$processTimelineMouseWheelHandler = [Windows.Input.MouseWheelEventHandler]{
+    param($sender, $eventArgs)
+    Forward-ProcessTimelineMouseWheel -Sender $sender -EventArgs $eventArgs
+}
+$controls.ProcessTimelineDataGrid.AddHandler(
+    [Windows.UIElement]::PreviewMouseWheelEvent,
+    $processTimelineMouseWheelHandler,
+    $true
+)
+$rowDetailsToggleHandler = [Windows.Input.MouseButtonEventHandler]{
+    param($sender, $eventArgs)
+    Toggle-DataGridRowDetails -DataGrid $sender -EventArgs $eventArgs
+}
+$controls.ProcessTimelineDataGrid.AddHandler(
+    [Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
+    $rowDetailsToggleHandler,
+    $true
+)
+$controls.DegradationDataGrid.AddHandler(
+    [Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
+    $rowDetailsToggleHandler,
+    $true
+)
 $controls.RefreshButton.Add_Click({ Update-BootLensView })
 $controls.StartupSearchTextBox.Add_TextChanged({ Apply-StartupItemsFilter })
 $controls.StartupSourceFilterComboBox.Add_SelectionChanged({ Apply-StartupItemsFilter })
