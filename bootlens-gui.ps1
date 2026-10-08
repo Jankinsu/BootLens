@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [ValidateSet(5, 10, 20, 50)]
-    [int]$Count = 10,
+    [ValidateSet(5, 10, 20, 30, 50)]
+    [int]$Count = 30,
 
     [switch]$ValidateOnly
 )
@@ -36,6 +36,8 @@ $controlNames = @(
     'PostBootValue'
     'PostBootProgress'
     'SampleCountText'
+    'TrendSummaryText'
+    'TrendChartCanvas'
     'HistoryDataGrid'
     'StartupTotalValue'
     'RegistryStartupCountValue'
@@ -135,6 +137,109 @@ function Show-ErrorMessage {
     $controls.ErrorBorder.Visibility = [Windows.Visibility]::Visible
 }
 
+function Add-TrendText {
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][double]$X,
+        [Parameter(Mandatory)][double]$Y,
+        [double]$Width = 100,
+        [Windows.Media.Brush]$Foreground = [Windows.Media.Brushes]::Gray,
+        [double]$FontSize = 11
+    )
+
+    $label = New-Object Windows.Controls.TextBlock
+    $label.Text = $Text
+    $label.Width = $Width
+    $label.FontSize = $FontSize
+    $label.Foreground = $Foreground
+    [Windows.Controls.Canvas]::SetLeft($label, $X)
+    [Windows.Controls.Canvas]::SetTop($label, $Y)
+    [void]$controls.TrendChartCanvas.Children.Add($label)
+}
+
+function Update-BootTrendChart {
+    param(
+        [Parameter(Mandatory)]
+        [object[]]$TrendRecords
+    )
+
+    $canvas = $controls.TrendChartCanvas
+    $canvas.Children.Clear()
+    if ($TrendRecords.Count -eq 0) {
+        return
+    }
+
+    $left = 58.0
+    $right = 884.0
+    $top = 16.0
+    $bottom = 174.0
+    $values = @(
+        foreach ($record in $TrendRecords) {
+            [double]$record.BootDurationMs
+            [double]$record.MainPathBootDurationMs
+            [double]$record.PostBootDurationMs
+        }
+    )
+    $minimum = [double](($values | Measure-Object -Minimum).Minimum)
+    $maximum = [double](($values | Measure-Object -Maximum).Maximum)
+    $span = $maximum - $minimum
+    if ($span -le 0) {
+        $span = [Math]::Max(1000.0, $maximum * 0.1)
+        $minimum = [Math]::Max(0.0, $minimum - ($span / 2.0))
+        $maximum = $minimum + $span
+    }
+    else {
+        $padding = $span * 0.12
+        $minimum = [Math]::Max(0.0, $minimum - $padding)
+        $maximum += $padding
+    }
+
+    $gridBrush = [Windows.Media.BrushConverter]::new().ConvertFromString('#E5E7EB')
+    foreach ($fraction in @(0.0, 0.5, 1.0)) {
+        $y = $bottom - (($bottom - $top) * $fraction)
+        $gridLine = New-Object Windows.Shapes.Line
+        $gridLine.X1 = $left
+        $gridLine.X2 = $right
+        $gridLine.Y1 = $y
+        $gridLine.Y2 = $y
+        $gridLine.Stroke = $gridBrush
+        $gridLine.StrokeThickness = 1
+        [void]$canvas.Children.Add($gridLine)
+        $axisValue = $minimum + (($maximum - $minimum) * $fraction)
+        Add-TrendText -Text ('{0:F0}s' -f ($axisValue / 1000.0)) -X 0 -Y ($y - 8) -Width 52
+    }
+
+    $series = @(
+        [pscustomobject]@{ Name = 'BootDurationMs'; Color = '#2563EB'; Thickness = 3.0 }
+        [pscustomobject]@{ Name = 'MainPathBootDurationMs'; Color = '#7C3AED'; Thickness = 2.0 }
+        [pscustomobject]@{ Name = 'PostBootDurationMs'; Color = '#059669'; Thickness = 2.0 }
+    )
+    foreach ($item in $series) {
+        $line = New-Object Windows.Shapes.Polyline
+        $line.Stroke = [Windows.Media.BrushConverter]::new().ConvertFromString($item.Color)
+        $line.StrokeThickness = $item.Thickness
+        $points = New-Object Windows.Media.PointCollection
+        for ($index = 0; $index -lt $TrendRecords.Count; $index++) {
+            $x = if ($TrendRecords.Count -eq 1) {
+                ($left + $right) / 2.0
+            }
+            else {
+                $left + (($right - $left) * $index / ($TrendRecords.Count - 1))
+            }
+            $value = [double]$TrendRecords[$index].$($item.Name)
+            $y = $bottom - (($value - $minimum) / ($maximum - $minimum) * ($bottom - $top))
+            [void]$points.Add([Windows.Point]::new($x, $y))
+        }
+        $line.Points = $points
+        [void]$canvas.Children.Add($line)
+    }
+
+    $oldestLabel = ([DateTimeOffset]$TrendRecords[0].BootStartTimeUtc).ToLocalTime().ToString('yyyy-MM-dd')
+    $newestLabel = ([DateTimeOffset]$TrendRecords[-1].BootStartTimeUtc).ToLocalTime().ToString('yyyy-MM-dd')
+    Add-TrendText -Text $oldestLabel -X $left -Y 184 -Width 100
+    Add-TrendText -Text $newestLabel -X ($right - 100) -Y 184 -Width 100
+}
+
 function Update-BootHistoryView {
     $selectedCount = [int]$controls.CountComboBox.SelectedItem.Content
     $scanEvents = [Math]::Max(100, $selectedCount * 5)
@@ -173,6 +278,26 @@ function Update-BootHistoryView {
     $controls.MainPathProgress.Value = $mainPercent
     $controls.PostBootProgress.Value = $postPercent
     $controls.SampleCountText.Text = '{0} confirmed full boots' -f $summary.SampleCount
+
+    $trend = $report.Trend
+    if ($null -ne $trend) {
+        $median = Format-Duration ([int]$trend.MedianBootDurationMs)
+        $medianDelta = '{0}{1:F1} s' -f $(if ($trend.ChangeFromMedianMs -gt 0) { '+' } else { '' }), ($trend.ChangeFromMedianMs / 1000.0)
+        $comparison = if ($null -eq $trend.ChangeFromPreviousBootMs) {
+            '只有 1 条样本，暂无相邻启动对比'
+        }
+        else {
+            $previousDelta = '{0}{1:F1} s' -f $(if ($trend.ChangeFromPreviousBootMs -gt 0) { '+' } else { '' }), ($trend.ChangeFromPreviousBootMs / 1000.0)
+            '最近一次比前一次 {0}' -f $previousDelta
+        }
+        $controls.TrendSummaryText.Text = '最近 {0} 次完整启动 · 中位数 {1} · 最近一次比中位数 {2}（正值表示耗时更长） · {3}' -f `
+            $trend.SampleCount, $median, $medianDelta, $comparison
+        Update-BootTrendChart -TrendRecords @($trend.Records)
+    }
+    else {
+        $controls.TrendSummaryText.Text = '没有可用于趋势展示的完整实测启动记录。'
+        $controls.TrendChartCanvas.Children.Clear()
+    }
 
     $history = @(
         foreach ($record in $report.Records) {

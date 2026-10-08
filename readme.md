@@ -109,6 +109,8 @@ docs/                            数据契约、阶段验证记录
 - [BootRecord](docs/boot-record.md)
 - [StartupItem](docs/startup-item.md)
 - [Process Timeline](docs/process-timeline.md)
+- [Boot Trend](docs/boot-trend.md)
+- [Phase 5 数据验证](docs/phase-5-data-validation.md)
 - [Phase 0 数据验证](docs/phase-0-data-validation.md)
 - [Phase 3 数据验证](docs/phase-3-data-validation.md)
 - [Phase 4 数据验证](docs/phase-4-data-validation.md)
@@ -122,12 +124,12 @@ docs/                            数据契约、阶段验证记录
 | Phase 2：启动项发现 | 只读发现常见自动启动配置来源 | 已完成 |
 | Phase 3：启动时间线 | 展示当前存活进程相对完整启动锚点的创建时间偏移 | 已完成 |
 | Phase 4：启动退化事件 | 展示 Event 101 原始数据、完整启动关联和目标匹配等级 | 已完成 |
-| Phase 5：趋势分析 | 分析最近完整启动的历史变化；建议首版查看最近 30 次启动及样本摘要 | 下一阶段 |
+| Phase 5：趋势分析 | 分析最近完整启动的历史变化；首版查看最近 30 次启动及样本摘要 | 已实现，待本机验收 |
 | Phase 6：诊断提示评估 | 在证据充分时给出可解释的观察或提示；不做无依据的单应用因果归因或自动系统修改 | 远期，需满足证据条件 |
 
-### 当前下一步：Phase 5
+### 当前阶段：Phase 5 本机验收
 
-基于最近 30 次确认的完整启动展示启动时间变化和样本摘要。趋势只描述启动记录本身；Event 101 仍作为独立的 Windows 诊断记录，不据此推导单个程序造成的启动延迟。
+启动历史页和 CLI 默认展示最近 30 次确认的完整启动，并包含实测耗时趋势和样本摘要。趋势只描述启动记录本身；Event 101 仍作为独立的 Windows 诊断记录，不据此推导单个程序造成的启动延迟。后续应在管理员 PowerShell 7 会话中完成 CLI 和 GUI 本机验收，再决定是否进入 Phase 6。
 
 ### 暂缓事项（独立于 Phase 5/6）
 

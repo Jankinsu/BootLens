@@ -301,11 +301,84 @@ function Get-BootLensSummary {
     }
 }
 
+function Get-BootLensTrend {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyCollection()]
+        [object[]]$BootRecords,
+
+        [ValidateRange(1, 100)]
+        [int]$Count = 30
+    )
+
+    $records = @(
+        $BootRecords |
+            Where-Object {
+                [string]$_.BootKind -eq 'Full' -and
+                [string]$_.TimingType -eq 'Measured'
+            } |
+            Sort-Object BootStartTimeUtc -Descending |
+            Select-Object -First $Count
+    )
+
+    if ($records.Count -eq 0) {
+        return $null
+    }
+
+    $chronologicalRecords = @($records | Sort-Object BootStartTimeUtc)
+    $durations = @($records | ForEach-Object { [long]$_.BootDurationMs } | Sort-Object)
+    $middle = [int][Math]::Floor($durations.Count / 2)
+    $median = if (($durations.Count % 2) -eq 1) {
+        [long]$durations[$middle]
+    }
+    else {
+        [long][Math]::Round(
+            ($durations[$middle - 1] + $durations[$middle]) / 2.0,
+            0,
+            [MidpointRounding]::AwayFromZero
+        )
+    }
+
+    $newest = $records[0]
+    $previous = if ($records.Count -gt 1) { $records[1] } else { $null }
+
+    [pscustomobject][ordered]@{
+        SchemaVersion              = 1
+        Source                     = 'DiagnosticsPerformanceEvent100'
+        Scope                      = 'RecentMeasuredFullBoots'
+        WindowLimit                = $Count
+        SampleCount                = $records.Count
+        OldestBootStartTimeUtc     = $chronologicalRecords[0].BootStartTimeUtc
+        NewestBootStartTimeUtc     = $newest.BootStartTimeUtc
+        MedianBootDurationMs      = $median
+        LatestBootDurationMs      = [long]$newest.BootDurationMs
+        ChangeFromMedianMs        = [long]$newest.BootDurationMs - $median
+        PreviousBootDurationMs    = if ($null -ne $previous) { [long]$previous.BootDurationMs } else { $null }
+        ChangeFromPreviousBootMs  = if ($null -ne $previous) {
+            [long]$newest.BootDurationMs - [long]$previous.BootDurationMs
+        }
+        else {
+            $null
+        }
+        Records = @(
+            foreach ($record in $chronologicalRecords) {
+                [pscustomobject][ordered]@{
+                    BootStartTimeUtc       = $record.BootStartTimeUtc
+                    BootDurationMs        = [long]$record.BootDurationMs
+                    MainPathBootDurationMs = [long]$record.MainPathBootDurationMs
+                    PostBootDurationMs    = [long]$record.PostBootDurationMs
+                }
+            }
+        )
+    }
+}
+
 function Get-BootLensReport {
     [CmdletBinding()]
     param(
         [ValidateRange(1, 100)]
-        [int]$Count = 10,
+        [int]$Count = 30,
 
         [ValidateRange(1, 1000)]
         [int]$ScanEvents = 100
@@ -393,6 +466,7 @@ function Get-BootLensReport {
 
     [pscustomobject][ordered]@{
         Summary                  = Get-BootLensSummary -BootRecords $records
+        Trend                    = Get-BootLensTrend -BootRecords $records -Count $Count
         Records                  = $records
         ScannedDiagnosticsCount  = $rawDiagnostics.Count
         ExcludedDiagnosticsCount = $rawDiagnostics.Count - $allRecords.Count
@@ -547,6 +621,7 @@ function Get-BootLensProcessTimeline {
 Export-ModuleMember -Function `
     ConvertTo-BootRecord, `
     Get-BootLensSummary, `
+    Get-BootLensTrend, `
     Get-BootLensReport, `
     ConvertTo-BootLensProcessTimeline, `
     Get-BootLensProcessTimeline

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidateRange(1, 100)]
-    [int]$Count = 10,
+    [int]$Count = 30,
 
     [ValidateRange(1, 1000)]
     [int]$ScanEvents = 100,
@@ -61,6 +61,14 @@ Write-Output ('Post Boot   {0}' -f (Format-Duration $latest.PostBootDurationMs))
 Write-Output ('Average     {0}' -f (Format-Duration $summary.AverageBootDurationMs))
 Write-Output ('Fastest     {0}' -f (Format-Duration $summary.FastestBootDurationMs))
 Write-Output ('Slowest     {0}' -f (Format-Duration $summary.SlowestBootDurationMs))
+if ($null -ne $report.Trend) {
+    Write-Output ('Median      {0}' -f (Format-Duration $report.Trend.MedianBootDurationMs))
+    if ($null -ne $report.Trend.ChangeFromPreviousBootMs) {
+        $previousChange = [long]$report.Trend.ChangeFromPreviousBootMs
+        $sign = if ($previousChange -gt 0) { '+' } else { '' }
+        Write-Output ('Vs Previous {0}{1:F1} s (positive means longer)' -f $sign, ($previousChange / 1000.0))
+    }
+}
 Write-Output ('Status      {0}' -f $status)
 Write-Output ('Samples     {0} confirmed full boots' -f $summary.SampleCount)
 Write-Output ''

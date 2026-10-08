@@ -80,10 +80,11 @@
                         Width="70"
                         Margin="0,0,12,0"
                         Padding="6"
-                        SelectedIndex="1">
+                        SelectedIndex="3">
                         <ComboBoxItem Content="5" />
                         <ComboBoxItem Content="10" />
                         <ComboBoxItem Content="20" />
+                        <ComboBoxItem Content="30" />
                         <ComboBoxItem Content="50" />
                     </ComboBox>
                     <Button x:Name="RefreshButton" Content="刷新" />
@@ -213,6 +214,41 @@
                             <ProgressBar x:Name="PostBootProgress" Foreground="#7C3AED" />
                         </StackPanel>
                     </Grid>
+                </Border>
+
+                <Border Margin="0,0,12,20" Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock
+                            Foreground="{StaticResource HeadingBrush}"
+                            FontSize="17"
+                            FontWeight="SemiBold"
+                            Text="完整启动耗时趋势" />
+                        <TextBlock
+                            x:Name="TrendSummaryText"
+                            Margin="0,6,0,10"
+                            Foreground="{StaticResource MutedBrush}"
+                            Text="等待启动记录..."
+                            TextWrapping="Wrap" />
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Viewbox Grid.Row="0" Height="220" Stretch="Fill" StretchDirection="Both">
+                                <Canvas x:Name="TrendChartCanvas" Width="900" Height="202" />
+                            </Viewbox>
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,0">
+                                <TextBlock Foreground="#2563EB" FontWeight="SemiBold" Text="● 总耗时" Margin="8,0" />
+                                <TextBlock Foreground="#7C3AED" FontWeight="SemiBold" Text="● Main Path" Margin="8,0" />
+                                <TextBlock Foreground="#059669" FontWeight="SemiBold" Text="● Post Boot" Margin="8,0" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock
+                            Margin="0,5,0,0"
+                            Foreground="{StaticResource MutedBrush}"
+                            FontSize="11"
+                            Text="纵轴按当前样本范围缩放；曲线表示 Windows 记录的实测值，不表示单个程序的耗时或因果影响。" />
+                    </StackPanel>
                 </Border>
 
                 <Border Margin="0,0,12,0" Style="{StaticResource CardStyle}">
