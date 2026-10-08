@@ -1,6 +1,6 @@
 # Boot Trend v1 数据契约
 
-状态：Phase 5 首版已实现；CLI、JSON 和 GUI 已由用户在 PowerShell 7 管理员会话中完成本机人工验收。自动化回归测试未运行。
+状态：Phase 5 首版已实现；CLI、JSON 和 GUI 已由用户在 PowerShell 7 管理员会话中完成本机人工验收，用户报告现有 PowerShell 测试套件全部通过。
 
 ## 1. 定义与范围
 

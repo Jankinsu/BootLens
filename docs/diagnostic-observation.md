@@ -1,6 +1,6 @@
 # Diagnostic Observation v1 数据契约
 
-状态：Phase 6 首版已实现；CLI、JSON 和 GUI 已由用户完成本机人工验收。自动化回归测试未运行。
+状态：Phase 6 首版已实现；CLI、JSON 和 GUI 已由用户完成本机人工验收，用户报告现有 PowerShell 测试套件全部通过。
 
 ## 1. 目标与边界
 

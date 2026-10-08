@@ -1,6 +1,6 @@
 # Phase 4 启动性能关联：数据验证
 
-状态：GUI 展示已实现；5 组 PowerShell 5.1 单测/验证全部通过。仍需用户在管理员 GUI 中确认本机数据渲染。已取得最近 20 条摘要及代表性原始样本；Event ID 101 的 `StartTime` 在 3 次启动中与 Event ID 100 `BootStartTime` 精确匹配。`DegradationTime` 的计算公式及更广目标覆盖仍未验证，因此只展示原始字段，不派生影响时间。
+状态：GUI 展示及管理员 GUI 本机数据渲染已由用户确认；PowerShell 测试套件已通过。已取得最近 20 条摘要及代表性原始样本；Event ID 101 的 `StartTime` 在 3 次启动中与 Event ID 100 `BootStartTime` 精确匹配。`DegradationTime` 的计算公式及更广目标覆盖仍未验证，因此只展示原始字段，不派生影响时间。
 
 ## 验证目标
 
@@ -173,6 +173,6 @@ EnabledState      Unknown
 
 ## 后续验证项
 
-1. 代码侧的 PowerShell 单元测试、语法解析和 XAML 验证已通过。
-2. 由用户在管理员 PowerShell 环境运行 GUI，确认本机 Event 101 行、启动锚点关联、目标匹配等级和原始耗时字段。
+1. 用户提供的管理员 GUI 画面显示 30 条 Event 101、21 条关联完整启动、5 条路径精确匹配；列表可见 App family candidate、Exact path、Generic host 与 Unmatched 等级，原始退化值正常显示。
+2. `DegradationTime` 的计算公式及更广目标覆盖仍未知；不据此派生应用延迟或排名。
 3. GUI 技术选型/切页性能问题仍单独暂缓，不在本阶段扩展。

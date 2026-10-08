@@ -1,6 +1,6 @@
 # Phase 6 诊断观察：实现与验收记录
 
-状态：CLI、JSON 和 GUI 人工验收已完成；自动化回归测试未运行。
+状态：CLI、JSON 和 GUI 人工验收已完成；用户报告现有 PowerShell 测试套件全部通过。
 
 ## 人工验收结果
 
@@ -25,4 +25,4 @@ $report.Diagnostics | Format-List
 
 确认结果：`SampleCount=30`；`WindowsFlaggedBootCount=2`、`WindowsNotFlaggedBootCount=28`、`WindowsFlagUnknownBootCount=0`，总数为 30。最近状态、时间和 Event 100 Record ID 与 GUI 一致。
 
-自动化回归测试未运行。
+用户报告现有 PowerShell 测试套件全部通过。
