@@ -1,156 +1,142 @@
 # BootLens
 
-BootLens 是一个面向 Windows 的只读启动观察工具。它读取 Windows 已记录的启动诊断信息，帮助查看完整启动历史、启动项配置和当前进程相对启动锚点的时间；不驻留后台，也不替用户自动修改系统。
+BootLens 是一个只读的 Windows 启动观察工具。它汇总 Windows 已记录的启动诊断数据、常见自动启动配置，以及扫描时仍在运行的进程信息，帮助你了解启动历史、启动项和启动相关诊断事件。BootLens 不驻留后台，也不会修改启动配置或系统设置。
 
-## 功能
+## 可以查看什么
 
-- **启动历史**：显示 Windows 确认的完整启动记录及启动阶段耗时。
-- **启动项发现**：查看 Registry Run、Startup Folder、Scheduled Tasks 和自动启动 Windows Services。
-- **进程时间线**：将扫描时仍在运行的进程创建时间与最近一次完整启动锚点比较。
-- **启动退化事件**：显示 Windows Diagnostics-Performance Event ID 101 原始记录，并尝试关联到 Event ID 100 完整启动记录。
+| 页面 | 内容 | 使用时要知道 |
+|---|---|---|
+| **启动历史** | 已确认的完整启动记录、启动阶段耗时和最近启动趋势 | 只统计符合完整启动数据契约的记录；睡眠/休眠恢复及无法确认类型的记录不纳入 |
+| **启动项** | Registry Run、Startup Folder、Scheduled Tasks、自动启动 Windows Services | 显示的是配置发现结果，不代表该项目实际运行，也不表示它造成了启动延迟 |
+| **进程时间线** | 扫描时仍在运行的进程、进程创建时间及其相对启动锚点的偏移 | 是当前进程快照，不包含已经退出的进程；需要管理员权限读取完整信息 |
+| **启动退化** | Windows Diagnostics-Performance Event ID 101 记录及其启动关联和目标匹配情况 | 展示 Windows 的原始诊断指标，不等于某个程序造成的启动延迟；需要管理员权限 |
 
 ## 快速开始
 
 ### 运行要求
 
-- Windows 和 PowerShell 7（`pwsh.exe`）；这是当前主要使用和验证的 PowerShell 版本。
-- GUI 当前由 PowerShell 脚本加载 WPF 界面。
-- 建议从**管理员权限**的 Windows Terminal / PowerShell 运行，以读取完整启动诊断日志和受限的启动项来源。非管理员运行时，部分数据可能不可用。
-- 当前项目无需安装第三方 PowerShell 模块。
+- Windows
+- PowerShell 7（`pwsh.exe`）；这是当前使用和验证的 PowerShell 版本。
+- 无需安装第三方 PowerShell 模块。
 
-Windows PowerShell 5.1 不是当前主要测试目标；除非后续专门增加兼容性验证，不应默认假设两个版本的行为完全一致。
-
-在项目根目录运行 GUI：
+查看完整数据时，建议以**管理员身份**打开 Windows Terminal 或 PowerShell 7。GUI 和 CLI 都可以从项目目录启动：
 
 ```powershell
+Set-Location "<BootLens 项目目录>"
 .\bootlens-gui.ps1
 ```
 
-### 命令行
+例如，项目位于 `E:\LearnToCode\shell\BootLens` 时：
 
 ```powershell
-# 最近 10 次确认的完整启动
-.\bootlens.ps1 -Count 10
-
-# 发现启动项；可用 -Source 选择来源
-.\bootlens-startup.ps1 -Source All
-
-# 扫描当前仍在运行的进程
-.\bootlens-processes.ps1 -Count 50
+Set-Location "E:\LearnToCode\shell\BootLens"
+.\bootlens-gui.ps1
 ```
 
-常用参数：
+启动后，使用顶部标签切换页面；可用右上角的“显示”选择记录数量，点击“刷新”重新读取数据。进程时间线和启动退化数据在首次打开对应页面时读取。
 
-| 入口 | 参数 |
-|---|---|
-| `bootlens.ps1` | `-Count`、`-ScanEvents`、`-AsJson` |
-| `bootlens-startup.ps1` | `-Source`、`-AsJson`、`-ShowCommand` |
-| `bootlens-processes.ps1` | `-Count`、`-ScanEvents`、`-OperationTimeoutSec`、`-AsJson` |
+普通权限下，启动项页面可能只能读取当前用户有权限查看的配置；启动历史、进程时间线或启动退化数据可能不可用。要查看完整数据，请从管理员权限的 PowerShell 7 启动 GUI 或 CLI。
 
-启动项 `-Source` 可选 `All`、`RegistryRun`、`StartupFolder`、`ScheduledTask` 或 `WindowsService`。`-ShowCommand` 会输出配置中的命令行，分享结果前注意检查是否包含敏感信息。
+## GUI 页面使用方法
+
+### 启动历史
+
+查看最近完整启动的时间、总耗时、Main Path 和 Post Boot，并通过趋势图和摘要比较样本。更改“显示”数量后，列表、趋势和摘要会按所选样本数更新。点击“刷新”重新读取。
+
+### 启动项
+
+查看发现的自动启动配置。可按来源筛选，也可用搜索框查找名称或目标。页面提供配置来源、作用域、解析状态和启用/启动状态，不会替你禁用或修改项目。
+
+### 进程时间线
+
+页面列出扫描时仍在运行的进程，并显示 PID、父 PID、进程创建时间、Boot Offset 和可执行文件路径。选择一行可查看完整路径和详情，再次选择该行可收起详情。列表可在表格内滚动；滚到表格顶部或底部后可继续滚动页面。
+
+Boot Offset 是进程创建时间相对最近完整启动锚点的时间差，不是进程自身启动耗时。由于时间戳来源和测量精度不同，锚点之前可能出现小幅负值。
+
+### 启动退化
+
+页面按行显示 Windows Event ID 101 诊断记录，包括启动时间、目标、匹配等级和 Windows 报告的退化值。选择一行可展开事件原始字段、事件路径及关联信息；再次选择该行可收起详情。
+
+目标匹配只是事件目标与当前启动项配置之间的线索。即使路径精确匹配，也不能据此认定该程序导致启动变慢；当前配置也未必等于事件发生时的历史配置。
+
+## 命令行用法
+
+在 PowerShell 7 中进入项目目录后运行脚本。需要完整数据时，请使用管理员权限的 PowerShell 7。
+
+### 查看启动历史和趋势摘要
+
+```powershell
+# 默认查看最近 30 次确认的完整启动
+.\bootlens.ps1
+
+# 查看最近 10 次启动
+.\bootlens.ps1 -Count 10
+
+# 输出 JSON，便于后续处理
+.\bootlens.ps1 -Count 30 -AsJson
+```
+
+常用参数：`-Count` 控制返回的启动样本数（1–100）；`-ScanEvents` 控制扫描的诊断事件数（1–1000）；`-AsJson` 输出 JSON。
+
+### 发现启动项
+
+```powershell
+# 查看所有来源
+.\bootlens-startup.ps1 -Source All
+
+# 只查看计划任务来源
+.\bootlens-startup.ps1 -Source ScheduledTask
+
+# 输出配置中的原始命令行或来源详情
+.\bootlens-startup.ps1 -Source All -ShowCommand
+
+# 输出 JSON
+.\bootlens-startup.ps1 -AsJson
+```
+
+`-Source` 可选 `All`、`RegistryRun`、`StartupFolder`、`ScheduledTask` 或 `WindowsService`。`-ShowCommand` 可能显示包含用户名、参数或其他敏感信息的命令行，分享输出前请先检查。
+
+### 查看当前运行进程
+
+```powershell
+# 查看最早创建的 50 条进程记录
+.\bootlens-processes.ps1 -Count 50
+
+# 输出 JSON
+.\bootlens-processes.ps1 -Count 100 -AsJson
+```
+
+常用参数：`-Count` 控制文本表格显示数量（1–1000）；`-ScanEvents` 控制寻找完整启动锚点时扫描的诊断事件数（1–1000）；`-OperationTimeoutSec` 设置读取操作超时（1–120 秒）；`-AsJson` 输出 JSON。此命令同样只记录扫描时仍在运行的进程。
 
 ## 如何理解结果
 
-### 完整启动
-
-BootLens 只将通过 Windows 启动事件交叉验证的完整启动纳入 `BootRecord`。已确认的 Restart 和 `shutdown /s /t 0` 后启动属于完整启动；Fast Startup、睡眠/休眠恢复及无法确认类型的记录不纳入。详细接受条件见 [BootRecord 数据契约](docs/boot-record.md)。
-
+- **完整启动**：BootLens 交叉验证 Windows 启动事件后才纳入统计。已确认的 Restart 和完整关机后启动可以纳入；Fast Startup、睡眠/休眠恢复及无法确认类型的记录不纳入。判定细节见 [BootRecord 数据契约](docs/boot-record.md)。
 - **Main Path**：Windows 报告的桌面出现前主要启动阶段耗时。
-- **Post Boot**：桌面出现后的 Windows 报告阶段耗时。
-- **Boot Offset**：进程创建时间相对完整启动锚点的偏移，**不是该进程启动耗时**。
+- **Post Boot**：Windows 报告的桌面出现后的启动阶段耗时。
+- **Average / Median / Fastest / Slowest**：所选启动样本的平均值、中位数、最快值和最慢值。样本数量较少时，单次异常会明显影响摘要。
+- **Windows 退化标记**：Event ID 100 提供的 Windows 标记，不解释具体原因，也不归责于某个应用。
+- **Event ID 101 退化值**：Windows 报告的原始指标。`TotalTime` 和 `DegradationTime` 是不同字段，BootLens 不将它们相加或相减来推导应用造成的延迟。
+- **匹配等级**：`Exact path` 表示路径与当前发现的启动项一致；`App family candidate` 表示名称相符但路径不同；`Generic host` 表示如 `svchost.exe` 的通用宿主；`Ambiguous / Unmatched` 表示候选不唯一或没有可靠匹配。匹配不代表因果关系。
+- **Unknown / 数据不可用**：表示系统未提供该值、读取权限不足或无法可靠确认。BootLens 会保留未知状态，不猜测缺失数据。
 
-进程时间线是扫描时仍然存活的进程快照；已经退出的进程不会出现在其中。启动项页面显示的是配置发现结果，不表示项目实际运行耗时或对启动的影响。
+## 常见问题
 
-### Windows 启动退化事件
+**页面显示数据不可用或权限提示**
 
-Event ID 101 的 `StartTime` 与 Event ID 100 的启动锚点精确匹配时，关联到对应完整启动。`TotalTime` 和 `DegradationTime` 是 Windows 报告的两个独立原始字段：BootLens 不相减、不相加，也不把它们解释成单个程序造成的启动延迟。
+关闭当前 GUI，以管理员身份打开 PowerShell 7，然后从项目目录重新运行 `.\bootlens-gui.ps1`。启动项页面仍可能显示当前账户可读取的配置。
 
-目标匹配等级说明：
+**启动历史样本少于所选数量**
 
-- **Exact path**：事件路径与当前发现的启动项路径相同；当前配置不一定等于事件发生时的历史配置。
-- **App family candidate**：名称相符但完整路径不同，仅为候选。
-- **Generic host**：如 `svchost.exe`，无法据此识别具体服务。
-- **Ambiguous / Unmatched**：存在多项候选，或没有可靠匹配。
+显示数量是上限。BootLens 只返回系统中仍可读取、且通过完整启动校验的记录；不符合条件的事件不会当作启动样本。
 
-任何匹配都不证明目标导致了启动变慢。更多样本与边界说明见 [Phase 4 数据验证](docs/phase-4-data-validation.md)。
+**进程列表中有 Unknown 路径或负 Boot Offset**
 
-## 测试
+Windows 可能不允许读取部分进程的时间戳或路径。负偏移可能来自时间戳精度差异；该字段是相对时间，不代表异常启动耗时。
 
-在 PowerShell 7 的项目根目录运行全部测试：
+## 数据定义与进一步阅读
 
-```powershell
-Get-ChildItem .\tests\*.Tests.ps1 | ForEach-Object {
-    & pwsh.exe -NoProfile -ExecutionPolicy Bypass -File $_.FullName
-    if ($LASTEXITCODE -ne 0) { throw "Test failed: $($_.Name)" }
-}
-```
-
-只验证 GUI XAML 与必需控件（不会读取事件日志或打开窗口）：
-
-```powershell
-.\bootlens-gui.ps1 -ValidateOnly
-```
-
-## 项目结构
-
-```text
-bootlens.ps1                    启动历史 CLI
-bootlens-startup.ps1            启动项发现 CLI
-bootlens-processes.ps1           当前进程时间线 CLI
-bootlens-gui.ps1                 WPF GUI 入口
-ui/MainWindow.xaml               GUI 布局
-scripts/                         数据 Provider 与只读探测脚本
-tests/                           PowerShell 回归与契约测试
-docs/                            数据契约、阶段验证记录
-```
-
-接手开发时建议先看本 README，再按任务阅读对应的数据契约和验证记录：
-
-- [BootRecord](docs/boot-record.md)
-- [StartupItem](docs/startup-item.md)
-- [Process Timeline](docs/process-timeline.md)
-- [Boot Trend](docs/boot-trend.md)
-- [Diagnostic Observation](docs/diagnostic-observation.md)
-- [Phase 6 数据验证](docs/phase-6-data-validation.md)
-- [Phase 5 数据验证](docs/phase-5-data-validation.md)
-- [Phase 0 数据验证](docs/phase-0-data-validation.md)
-- [Phase 3 数据验证](docs/phase-3-data-validation.md)
-- [Phase 4 数据验证](docs/phase-4-data-validation.md)
-
-## 项目路线图
-
-| 阶段 | 目标 | 状态 |
-|---|---|---|
-| Phase 0：数据验证 | 验证 Windows 启动事件、启动类型与数据语义 | 已完成 |
-| Phase 1：启动历史 | 展示已确认的完整启动记录及阶段耗时 | 已完成 |
-| Phase 2：启动项发现 | 只读发现常见自动启动配置来源 | 已完成 |
-| Phase 3：启动时间线 | 展示当前存活进程相对完整启动锚点的创建时间偏移 | 数据展示、权限降级、列表滚动、完整路径和详情开合已验收 |
-| Phase 4：启动退化事件 | 展示 Event 101 原始数据、完整启动关联和目标匹配等级 | 数据展示、权限降级及详情开合已验收 |
-| Phase 5：趋势分析 | 分析最近完整启动的历史变化；首版查看最近 30 次启动及样本摘要 | 已实现，人工验收完成 |
-| Phase 6：诊断提示评估 | 汇总 Windows 明确记录的退化标记；不做无依据的单应用因果归因或自动系统修改 | 首版已实现，人工验收完成 |
-
-### Phase 5 验收状态
-
-启动历史页和 CLI 默认展示最近 30 次确认的完整启动，并包含实测耗时趋势和样本摘要；CLI、JSON 和 GUI 已完成管理员 PowerShell 7 本机人工验收。趋势只描述启动记录本身；Event 101 仍作为独立的 Windows 诊断记录，不据此推导单个程序造成的启动延迟。
-
-### Phase 6 验收状态
-
-诊断观察首版只汇总最近完整实测启动中 Event 100 的 Windows 退化标记（已标记、未标记、未知），并显示最新记录的时间和 Event 100 Record ID。CLI、JSON 和 GUI 已完成人工验收。它不推断具体原因或责任应用；Event 101 仍独立展示。后续如需扩展其他提示，须先确认有足够证据。
-
-### 当前下一步：验收 GUI 切页响应优化
-
-管理员 GUI 下各页面、普通权限降级、进程时间线列表滚动与完整路径展开，以及两个详情页的开合均已由用户确认正常。针对切页时约 2–3 秒的卡顿，已为表格限制视口并启用行虚拟化；进程时间线和启动退化数据改为后台读取、完成后再更新页面。待用户验收：切页能否立即响应，后台加载时窗口是否仍可操作，以及表格到达顶部/底部时能否继续滚动页面。
-
-### 暂缓事项（独立于 Phase 5/6）
-
-以下事项暂缓，尚未选定技术方案或开始重构：
-
-- **独立 GUI 重构**：未来评估如何让 GUI 脱离当前 PowerShell 托管 WPF 的实现方式，选择并验证独立桌面应用技术栈；目前不预选框架。
-- **GUI 性能评估**：已观察到页面切换约有 2–3 秒延迟，首轮优化已加入有限表格视口、行虚拟化和异步延迟页面加载；待本机人工验收后再决定是否需要进一步剖析或重构。
-
-## 开发约束
-
-- 只读、按需运行；不创建后台服务、不修改启动配置。
-- 优先使用 Windows 自身已有数据，明确标注数据来源与不可用状态。
-- 严格区分测量值、快照、候选关联和推断；证据不足时保留 `Unknown` / 未匹配，不制造精度或因果结论。
-- 先维护数据正确性和语义，再扩展功能；避免不必要的依赖、常驻工作和系统扰动。
+- [BootRecord：完整启动记录](docs/boot-record.md)
+- [StartupItem：启动项发现](docs/startup-item.md)
+- [Process Timeline：进程时间线](docs/process-timeline.md)
+- [Boot Trend：启动趋势](docs/boot-trend.md)
+- [Diagnostic Observation：Windows 诊断观察](docs/diagnostic-observation.md)
