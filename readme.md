@@ -2,6 +2,10 @@
 
 BootLens 是一个只读的 Windows 启动观察工具。它汇总 Windows 已记录的启动诊断数据、常见自动启动配置，以及扫描时仍在运行的进程信息，帮助你了解启动历史、启动项和启动相关诊断事件。BootLens 不驻留后台，也不会修改启动配置或系统设置。
 
+<p align="center">
+  <img src="docs/images/bootlens-dashboard.png" alt="BootLens 启动历史页面，展示耗时摘要、启动阶段构成和趋势图" width="1000">
+</p>
+
 ## 可以查看什么
 
 | 页面 | 内容 | 使用时要知道 |
