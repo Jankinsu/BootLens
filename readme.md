@@ -1186,6 +1186,7 @@ Phase 1 启动历史 CLI 初版已完成
 Phase 1 轻量 GUI 原型已实现
 Phase 2 Registry Run、Startup Folder、Scheduled Tasks 与 Windows Services 启动项发现已实现
 Phase 2 启动项 GUI 页面已实现
+Phase 3 当前进程时间线只读 CLI 原型已实现
 ```
 
 Phase 0 已经完成：
@@ -1209,6 +1210,16 @@ Phase 0 已经完成：
 .\bootlens.ps1 -Count 5
 .\bootlens.ps1 -Count 10 -AsJson
 ```
+
+当前已有 Phase 3 当前进程时间线 CLI 原型（需要管理员 PowerShell）：
+
+```powershell
+.\bootlens-processes.ps1
+.\bootlens-processes.ps1 -Count 20
+.\bootlens-processes.ps1 -AsJson
+```
+
+该页面基于 `Win32_Process.CreationDate`，只展示扫描时仍运行的进程；已退出进程不在快照中。Boot Offset 相对已确认的完整启动 `BootStartTimeUtc` 计算，保留负偏移；详见 `docs/process-timeline.md` 与 `docs/phase-3-data-validation.md`。
 
 当前已有 Phase 1 GUI 原型：
 
@@ -1305,7 +1316,7 @@ shutdown /s /t 0 后开机          = 完整启动
 
 当前任务：
 
-> 继续评估其他 Phase 2 来源，优先验证 UWP Startup Tasks 的公开发现接口和实际数据范围。
+> Phase 2 已覆盖 Registry Run、Startup Folder、Scheduled Tasks 与 Windows Services。UWP Startup Tasks 已完成只读评估：本机发现 4 条包清单声明，但没有适用于 BootLens 的受支持全局状态枚举接口，因此暂缓纳入。Phase 3 当前进程快照 Provider 与 CLI 原型已实现；下一步在管理员 PowerShell 中验证本机输出，再决定 GUI 呈现范围。
 
 ---
 

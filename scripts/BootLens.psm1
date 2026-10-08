@@ -399,4 +399,154 @@ function Get-BootLensReport {
     }
 }
 
-Export-ModuleMember -Function ConvertTo-BootRecord, Get-BootLensSummary, Get-BootLensReport
+function ConvertTo-BootLensProcessTimeline {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyCollection()]
+        [object[]]$Processes,
+
+        [Parameter(Mandatory)]
+        [object]$BootRecord,
+
+        [DateTimeOffset]$SnapshotTimeUtc = [DateTimeOffset]::UtcNow
+    )
+
+    if ([string]$BootRecord.BootKind -ne 'Full') {
+        throw 'Process timeline requires a confirmed full BootRecord.'
+    }
+
+    $bootStartUtc = ([DateTimeOffset]$BootRecord.BootStartTimeUtc).ToUniversalTime()
+    $snapshotUtc = $SnapshotTimeUtc.ToUniversalTime()
+    $records = @(
+        foreach ($process in $Processes) {
+            $processId = 0
+            if (-not [int]::TryParse([string]$process.ProcessId, [ref]$processId)) {
+                continue
+            }
+
+            $parentProcessId = $null
+            $parsedParentProcessId = 0
+            if ([int]::TryParse([string]$process.ParentProcessId, [ref]$parsedParentProcessId)) {
+                $parentProcessId = $parsedParentProcessId
+            }
+
+            $creationTimeUtc = $null
+            $bootOffsetMs = $null
+            $creationDateProperty = $process.PSObject.Properties['CreationDate']
+
+            if ($null -ne $creationDateProperty -and $null -ne $creationDateProperty.Value) {
+                try {
+                    $creationDate = [datetime]$creationDateProperty.Value
+                    if ($creationDate -ne [datetime]::MinValue) {
+                        $creationTimeUtc = [DateTimeOffset]$creationDate.ToUniversalTime()
+                        $bootOffsetMs = [long][Math]::Round(
+                            ($creationTimeUtc - $bootStartUtc).TotalMilliseconds,
+                            0,
+                            [MidpointRounding]::AwayFromZero
+                        )
+                    }
+                }
+                catch {
+                    $creationTimeUtc = $null
+                    $bootOffsetMs = $null
+                }
+            }
+
+            $name = [string]$process.Name
+            if ([string]::IsNullOrWhiteSpace($name)) {
+                $name = 'Unknown'
+            }
+
+            $executablePath = $null
+            $executablePathProperty = $process.PSObject.Properties['ExecutablePath']
+            if ($null -ne $executablePathProperty -and
+                -not [string]::IsNullOrWhiteSpace([string]$executablePathProperty.Value)) {
+                $executablePath = [string]$executablePathProperty.Value
+            }
+
+            $identityTime = if ($null -ne $creationTimeUtc) {
+                $creationTimeUtc.ToString('o', [Globalization.CultureInfo]::InvariantCulture)
+            }
+            else {
+                'Unavailable@{0}' -f $snapshotUtc.ToString('o', [Globalization.CultureInfo]::InvariantCulture)
+            }
+
+            [pscustomobject][ordered]@{
+                SchemaVersion       = 1
+                Source              = 'Win32ProcessCreationDate'
+                SourceIdentity      = 'Win32Process|{0}|{1}' -f $processId, $identityTime
+                Name                = $name
+                ProcessId           = $processId
+                ParentProcessId     = $parentProcessId
+                ExecutablePath      = $executablePath
+                CreationTimeUtc     = $creationTimeUtc
+                BootStartTimeUtc    = $bootStartUtc
+                BootKind            = 'Full'
+                BootOffsetMs        = $bootOffsetMs
+                CreationTimeStatus  = if ($null -eq $creationTimeUtc) { 'Unavailable' } else { 'Available' }
+            }
+        }
+    )
+    $sortedRecords = @(
+        $records | Sort-Object `
+            @{ Expression = { if ($null -eq $_.BootOffsetMs) { [long]::MaxValue } else { [long]$_.BootOffsetMs } } },
+            ProcessId
+    )
+
+    [pscustomobject][ordered]@{
+        SchemaVersion          = 1
+        Source                 = 'Win32ProcessCreationDate'
+        SnapshotTimeUtc        = $snapshotUtc
+        BootStartTimeUtc       = $bootStartUtc
+        BootKind               = 'Full'
+        Scope                  = 'CurrentRunningProcesses'
+        ProcessCount           = $sortedRecords.Count
+        TimestampedCount       = @($sortedRecords | Where-Object CreationTimeStatus -eq 'Available').Count
+        UnavailableCount       = @($sortedRecords | Where-Object CreationTimeStatus -eq 'Unavailable').Count
+        NegativeOffsetCount    = @($sortedRecords | Where-Object { $null -ne $_.BootOffsetMs -and $_.BootOffsetMs -lt 0 }).Count
+        Processes              = $sortedRecords
+    }
+}
+
+function Get-BootLensProcessTimeline {
+    [CmdletBinding()]
+    param(
+        [ValidateRange(1, 1000)]
+        [int]$ScanEvents = 100,
+
+        [ValidateRange(1, 120)]
+        [int]$OperationTimeoutSec = 15
+    )
+
+    $bootReport = Get-BootLensReport -Count 1 -ScanEvents $ScanEvents
+    if ($null -eq $bootReport.Summary -or $bootReport.Records.Count -eq 0) {
+        throw 'No confirmed full boot record is available for the process timeline.'
+    }
+
+    try {
+        $processes = @(
+            Get-CimInstance -ClassName Win32_Process `
+                -OperationTimeoutSec $OperationTimeoutSec `
+                -ErrorAction Stop
+        )
+    }
+    catch {
+        throw @(
+            'Cannot read the current process snapshot from Win32_Process.'
+            'Open PowerShell as Administrator and run BootLens again.'
+            "Windows reported: $($_.Exception.Message)"
+        ) -join [Environment]::NewLine
+    }
+
+    return ConvertTo-BootLensProcessTimeline `
+        -Processes $processes `
+        -BootRecord $bootReport.Records[0]
+}
+
+Export-ModuleMember -Function `
+    ConvertTo-BootRecord, `
+    Get-BootLensSummary, `
+    Get-BootLensReport, `
+    ConvertTo-BootLensProcessTimeline, `
+    Get-BootLensProcessTimeline

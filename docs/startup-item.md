@@ -52,6 +52,8 @@ Shell Extensions
 
 `RunOnce` 是一次性安装或配置机制，不应与长期启动项混在同一批数据中。
 
+UWP 包清单可以声明 `StartupTask`，但 `Enabled` 表示初始配置，不足以证明任务当前启用。微软公开的 `StartupTask` 状态 API 按调用应用的当前包提供任务，不提供供未打包的 BootLens 全局枚举其他包任务状态的接口。因此 v4 不把仅从清单发现的声明当作已配置启动项；在找到受支持的全局状态来源前，UWP 来源暂缓。
+
 ## 3. 字段定义
 
 | 字段 | 类型 | 必需 | 语义 |
@@ -502,6 +504,8 @@ Disabled                    9 条
 ```
 
 抽查的 `WbioSrvc`、`CDPSvc` 与 `DoSvc` 存在服务触发器；它们按事件启动，不计入自动系统启动服务。注册表中另有未作为 SCM 服务对象枚举的驱动和每用户服务模板，v4 不把这些条目重复加入普通服务清单。Boot/System 驱动服务留待独立建模。
+
+同日对当前用户已安装的 172 个 AppX 包做只读清单检查，发现 4 条 UWP `StartupTask` 声明（Windows Terminal、Phone Link、Xbox、Microsoft 365 Copilot）。清单声明数不等于当前启用数；本机 `StartupApproved` 也没有 `StartupTask` 子键。每个包对应的 `SystemAppData` 内部注册表键虽可见 `State` 值，但微软没有将其定义为面向应用的全局查询契约，故不将其作为 Provider 数据源。UWP 暂缓纳入 v4。
 
 ## 12. 参考资料
 
