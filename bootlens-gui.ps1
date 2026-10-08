@@ -26,6 +26,8 @@ $controlNames = @(
     'DegradationTab'
     'ErrorBorder'
     'ErrorTextBlock'
+    'BootHistoryStatusBorder'
+    'BootHistoryStatusText'
     'LastBootValue'
     'AverageValue'
     'FastestValue'
@@ -55,11 +57,15 @@ $controlNames = @(
     'ProcessUnavailableValue'
     'ProcessNegativeOffsetValue'
     'ProcessSnapshotText'
+    'ProcessTimelineStatusBorder'
+    'ProcessTimelineStatusText'
     'ProcessTimelineDataGrid'
     'DegradationEventCountValue'
     'DegradationMatchedBootCountValue'
     'DegradationExactPathCountValue'
     'DegradationListStatusText'
+    'DegradationStatusBorder'
+    'DegradationStatusText'
     'DegradationDataGrid'
     'FooterStatusText'
 )
@@ -136,6 +142,67 @@ function Show-ErrorMessage {
 
     $controls.ErrorTextBlock.Text = $Message
     $controls.ErrorBorder.Visibility = [Windows.Visibility]::Visible
+}
+
+function Get-PageFailureMessage {
+    param(
+        [Parameter(Mandatory)][string]$PageName,
+        [Parameter(Mandatory)][string]$Message
+    )
+
+    if ($Message -match 'Administrator|unauthorized|access is denied|UnauthorizedAccess|AccessDenied') {
+        return "${PageName}数据需要管理员权限读取。请关闭 BootLens，在管理员 PowerShell 7 中运行 .\bootlens-gui.ps1。启动项页面仍可能显示当前用户可读取的配置。"
+    }
+
+    return "${PageName}数据读取失败：$Message"
+}
+
+function Set-BootHistoryUnavailable {
+    param([Parameter(Mandatory)][string]$Message)
+
+    $controls.BootHistoryStatusText.Text = $Message
+    $controls.BootHistoryStatusBorder.Visibility = [Windows.Visibility]::Visible
+    $controls.LastBootValue.Text = '--'
+    $controls.AverageValue.Text = '--'
+    $controls.FastestValue.Text = '--'
+    $controls.SlowestValue.Text = '--'
+    $controls.LatestBootTimeText.Text = '--'
+    $controls.MainPathValue.Text = '--'
+    $controls.PostBootValue.Text = '--'
+    $controls.MainPathProgress.Value = 0
+    $controls.PostBootProgress.Value = 0
+    $controls.SampleCountText.Text = '--'
+    $controls.TrendSummaryText.Text = '启动趋势数据不可用。'
+    $controls.TrendChartCanvas.Children.Clear()
+    $controls.DiagnosticSummaryText.Text = 'Windows 诊断观察数据不可用。'
+    $controls.HistoryDataGrid.ItemsSource = @()
+}
+
+function Set-ProcessTimelineUnavailable {
+    param([Parameter(Mandatory)][string]$Message)
+
+    $controls.ProcessTimelineStatusText.Text = $Message
+    $controls.ProcessTimelineStatusBorder.Visibility = [Windows.Visibility]::Visible
+    $controls.ProcessTotalValue.Text = '--'
+    $controls.ProcessTimestampedValue.Text = '--'
+    $controls.ProcessUnavailableValue.Text = '--'
+    $controls.ProcessNegativeOffsetValue.Text = '--'
+    $controls.ProcessSnapshotText.Text = '进程快照不可用'
+    $controls.ProcessTimelineDataGrid.ItemsSource = @()
+    $script:ProcessTimelineLoaded = $false
+}
+
+function Set-DegradationUnavailable {
+    param([Parameter(Mandatory)][string]$Message)
+
+    $controls.DegradationStatusText.Text = $Message
+    $controls.DegradationStatusBorder.Visibility = [Windows.Visibility]::Visible
+    $controls.DegradationListStatusText.Text = '数据不可用'
+    $controls.DegradationEventCountValue.Text = '--'
+    $controls.DegradationMatchedBootCountValue.Text = '--'
+    $controls.DegradationExactPathCountValue.Text = '--'
+    $controls.DegradationDataGrid.ItemsSource = @()
+    $script:DegradationLoaded = $false
 }
 
 function Add-TrendText {
@@ -249,6 +316,8 @@ function Update-BootHistoryView {
     if ($null -eq $report.Summary -or $report.Records.Count -eq 0) {
         throw 'No confirmed full boot records were found.'
     }
+
+    $controls.BootHistoryStatusBorder.Visibility = [Windows.Visibility]::Collapsed
 
     $summary = $report.Summary
     $latest = $report.Records[0]
@@ -451,6 +520,7 @@ function Update-StartupItemsView {
 
 function Update-ProcessTimelineView {
     $report = Get-BootLensProcessTimeline
+    $controls.ProcessTimelineStatusBorder.Visibility = [Windows.Visibility]::Collapsed
     $controls.ProcessTotalValue.Text = [string]$report.ProcessCount
     $controls.ProcessTimestampedValue.Text = [string]$report.TimestampedCount
     $controls.ProcessUnavailableValue.Text = [string]$report.UnavailableCount
@@ -500,6 +570,8 @@ function Update-DegradationView {
         -BootCount 100 `
         -BootScanEvents 1000 `
         -StartupItems $script:StartupItems
+
+    $controls.DegradationStatusBorder.Visibility = [Windows.Visibility]::Collapsed
 
     $controls.DegradationEventCountValue.Text = [string]$report.EventCount
     $controls.DegradationMatchedBootCountValue.Text = [string]$report.MatchedBootCount
@@ -571,15 +643,8 @@ function Update-BootLensView {
             Update-BootHistoryView
         }
         catch {
-            $message = $_.Exception.Message
-
-            if ($message -match 'Administrator|unauthorized|access is denied') {
-                $message = @(
-                    'Administrator access is required to read the boot performance log.'
-                    'Open the PowerShell (AD) profile in Windows Terminal and run BootLens again.'
-                ) -join [Environment]::NewLine
-            }
-
+            $message = Get-PageFailureMessage -PageName '启动历史' -Message $_.Exception.Message
+            Set-BootHistoryUnavailable -Message $message
             $errors.Add($message)
         }
 
@@ -596,7 +661,9 @@ function Update-BootLensView {
                 Update-ProcessTimelineView
             }
             catch {
-                $errors.Add("Process timeline discovery failed: $($_.Exception.Message)")
+                $message = Get-PageFailureMessage -PageName '进程时间线' -Message $_.Exception.Message
+                Set-ProcessTimelineUnavailable -Message $message
+                $errors.Add($message)
             }
         }
 
@@ -606,8 +673,9 @@ function Update-BootLensView {
                 Update-DegradationView
             }
             catch {
-                $controls.DegradationListStatusText.Text = 'Event 101 unavailable'
-                $errors.Add("Startup degradation discovery failed: $($_.Exception.Message)")
+                $message = Get-PageFailureMessage -PageName '启动退化' -Message $_.Exception.Message
+                Set-DegradationUnavailable -Message $message
+                $errors.Add($message)
             }
         }
 
@@ -656,7 +724,9 @@ $controls.MainTabControl.Add_SelectionChanged({
             $controls.FooterStatusText.Text = 'Updated {0:HH:mm:ss}' -f (Get-Date)
         }
         catch {
-            Show-ErrorMessage -Message $_.Exception.Message
+            $message = Get-PageFailureMessage -PageName '进程时间线' -Message $_.Exception.Message
+            Set-ProcessTimelineUnavailable -Message $message
+            Show-ErrorMessage -Message $message
             $controls.FooterStatusText.Text = 'Process timeline unavailable {0:HH:mm:ss}' -f (Get-Date)
         }
         finally {
@@ -673,8 +743,9 @@ $controls.MainTabControl.Add_SelectionChanged({
             $controls.FooterStatusText.Text = 'Updated {0:HH:mm:ss}' -f (Get-Date)
         }
         catch {
-            $controls.DegradationListStatusText.Text = 'Event 101 unavailable'
-            Show-ErrorMessage -Message $_.Exception.Message
+            $message = Get-PageFailureMessage -PageName '启动退化' -Message $_.Exception.Message
+            Set-DegradationUnavailable -Message $message
+            Show-ErrorMessage -Message $message
             $controls.FooterStatusText.Text = 'Degradation unavailable {0:HH:mm:ss}' -f (Get-Date)
         }
         finally {

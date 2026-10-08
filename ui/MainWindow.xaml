@@ -112,6 +112,17 @@
             <TabItem Header="启动历史">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="24,20,12,24">
+                <Border
+                    x:Name="BootHistoryStatusBorder"
+                    Margin="0,0,12,16"
+                    Padding="14,10"
+                    Background="#FFF7ED"
+                    BorderBrush="#FED7AA"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Visibility="Collapsed">
+                    <TextBlock x:Name="BootHistoryStatusText" Foreground="#9A3412" TextWrapping="Wrap" />
+                </Border>
                 <UniformGrid Columns="4" Margin="0,0,0,20">
                     <Border Style="{StaticResource CardStyle}">
                         <StackPanel>
@@ -514,6 +525,17 @@
             <TabItem x:Name="ProcessTimelineTab" Header="进程时间线">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="24,20,12,24">
+                        <Border
+                            x:Name="ProcessTimelineStatusBorder"
+                            Margin="0,0,12,16"
+                            Padding="14,10"
+                            Background="#FFF7ED"
+                            BorderBrush="#FED7AA"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Visibility="Collapsed">
+                            <TextBlock x:Name="ProcessTimelineStatusText" Foreground="#9A3412" TextWrapping="Wrap" />
+                        </Border>
                         <UniformGrid Columns="3" Margin="0,0,0,20">
                             <Border Style="{StaticResource CardStyle}">
                                 <StackPanel>
@@ -633,6 +655,17 @@
             <TabItem x:Name="DegradationTab" Header="启动退化">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="24,20,12,24">
+                        <Border
+                            x:Name="DegradationStatusBorder"
+                            Margin="0,0,12,16"
+                            Padding="14,10"
+                            Background="#FFF7ED"
+                            BorderBrush="#FED7AA"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Visibility="Collapsed">
+                            <TextBlock x:Name="DegradationStatusText" Foreground="#9A3412" TextWrapping="Wrap" />
+                        </Border>
                         <UniformGrid Columns="4" Margin="0,0,0,20">
                             <Border Style="{StaticResource CardStyle}">
                                 <StackPanel>
