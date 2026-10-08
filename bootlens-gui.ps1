@@ -38,6 +38,7 @@ $controlNames = @(
     'SampleCountText'
     'TrendSummaryText'
     'TrendChartCanvas'
+    'DiagnosticSummaryText'
     'HistoryDataGrid'
     'StartupTotalValue'
     'RegistryStartupCountValue'
@@ -297,6 +298,27 @@ function Update-BootHistoryView {
     else {
         $controls.TrendSummaryText.Text = '没有可用于趋势展示的完整实测启动记录。'
         $controls.TrendChartCanvas.Children.Clear()
+    }
+
+    $diagnostics = $report.Diagnostics
+    if ($null -ne $diagnostics) {
+        $latestStateText = switch ($diagnostics.LatestWindowsDegradationState) {
+            'Flagged' { '最近一次：Windows 标记了启动退化' }
+            'NotFlagged' { '最近一次：Windows 未设置启动退化标记' }
+            default { '最近一次：Windows 标记未知' }
+        }
+        $latestDate = ([DateTimeOffset]$diagnostics.LatestBootStartTimeUtc).ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss')
+        $controls.DiagnosticSummaryText.Text = '最近 {0} 次完整启动：Windows 标记 {1} 次退化、{2} 次未标记、{3} 次未知。{4}（{5}，Event 100 #{6}）' -f `
+            $diagnostics.SampleCount,
+            $diagnostics.WindowsFlaggedBootCount,
+            $diagnostics.WindowsNotFlaggedBootCount,
+            $diagnostics.WindowsFlagUnknownBootCount,
+            $latestStateText,
+            $latestDate,
+            $diagnostics.LatestDiagnosticsEventRecordId
+    }
+    else {
+        $controls.DiagnosticSummaryText.Text = '没有可用于诊断观察的完整实测启动记录。'
     }
 
     $history = @(

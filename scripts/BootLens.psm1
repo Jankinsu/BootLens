@@ -374,6 +374,58 @@ function Get-BootLensTrend {
     }
 }
 
+function Get-BootLensDiagnosticSummary {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyCollection()]
+        [object[]]$BootRecords,
+
+        [ValidateRange(1, 100)]
+        [int]$Count = 30
+    )
+
+    $records = @(
+        $BootRecords |
+            Where-Object {
+                [string]$_.BootKind -eq 'Full' -and
+                [string]$_.TimingType -eq 'Measured'
+            } |
+            Sort-Object BootStartTimeUtc -Descending |
+            Select-Object -First $Count
+    )
+
+    if ($records.Count -eq 0) {
+        return $null
+    }
+
+    $latest = $records[0]
+    $latestState = if ($latest.IsWindowsDegradation -eq $true) {
+        'Flagged'
+    }
+    elseif ($latest.IsWindowsDegradation -eq $false) {
+        'NotFlagged'
+    }
+    else {
+        'Unknown'
+    }
+
+    [pscustomobject][ordered]@{
+        SchemaVersion                   = 1
+        Source                          = 'DiagnosticsPerformanceEvent100'
+        Scope                           = 'RecentMeasuredFullBoots'
+        WindowLimit                     = $Count
+        SampleCount                     = $records.Count
+        WindowsFlaggedBootCount         = @($records | Where-Object { $_.IsWindowsDegradation -eq $true }).Count
+        WindowsNotFlaggedBootCount      = @($records | Where-Object { $_.IsWindowsDegradation -eq $false }).Count
+        WindowsFlagUnknownBootCount    = @($records | Where-Object { $null -eq $_.IsWindowsDegradation }).Count
+        LatestBootStartTimeUtc          = $latest.BootStartTimeUtc
+        LatestBootDurationMs            = [long]$latest.BootDurationMs
+        LatestWindowsDegradationState   = $latestState
+        LatestDiagnosticsEventRecordId  = [long]$latest.DiagnosticsEventRecordId
+    }
+}
+
 function Get-BootLensReport {
     [CmdletBinding()]
     param(
@@ -467,6 +519,7 @@ function Get-BootLensReport {
     [pscustomobject][ordered]@{
         Summary                  = Get-BootLensSummary -BootRecords $records
         Trend                    = Get-BootLensTrend -BootRecords $records -Count $Count
+        Diagnostics              = Get-BootLensDiagnosticSummary -BootRecords $records -Count $Count
         Records                  = $records
         ScannedDiagnosticsCount  = $rawDiagnostics.Count
         ExcludedDiagnosticsCount = $rawDiagnostics.Count - $allRecords.Count
@@ -622,6 +675,7 @@ Export-ModuleMember -Function `
     ConvertTo-BootRecord, `
     Get-BootLensSummary, `
     Get-BootLensTrend, `
+    Get-BootLensDiagnosticSummary, `
     Get-BootLensReport, `
     ConvertTo-BootLensProcessTimeline, `
     Get-BootLensProcessTimeline

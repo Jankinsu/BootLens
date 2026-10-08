@@ -71,6 +71,17 @@ if ($null -ne $report.Trend) {
 }
 Write-Output ('Status      {0}' -f $status)
 Write-Output ('Samples     {0} confirmed full boots' -f $summary.SampleCount)
+if ($null -ne $report.Diagnostics) {
+    $diagnostics = $report.Diagnostics
+    Write-Output (
+        'Windows flag {0} flagged, {1} not flagged, {2} unknown of {3} recent boots' -f
+        $diagnostics.WindowsFlaggedBootCount,
+        $diagnostics.WindowsNotFlaggedBootCount,
+        $diagnostics.WindowsFlagUnknownBootCount,
+        $diagnostics.SampleCount
+    )
+    Write-Output ('Flag source  Event 100 #{0}' -f $diagnostics.LatestDiagnosticsEventRecordId)
+}
 Write-Output ''
 Write-Output 'Recent Boots'
 

@@ -110,6 +110,8 @@ docs/                            数据契约、阶段验证记录
 - [StartupItem](docs/startup-item.md)
 - [Process Timeline](docs/process-timeline.md)
 - [Boot Trend](docs/boot-trend.md)
+- [Diagnostic Observation](docs/diagnostic-observation.md)
+- [Phase 6 数据验证](docs/phase-6-data-validation.md)
 - [Phase 5 数据验证](docs/phase-5-data-validation.md)
 - [Phase 0 数据验证](docs/phase-0-data-validation.md)
 - [Phase 3 数据验证](docs/phase-3-data-validation.md)
@@ -125,11 +127,15 @@ docs/                            数据契约、阶段验证记录
 | Phase 3：启动时间线 | 展示当前存活进程相对完整启动锚点的创建时间偏移 | 已完成 |
 | Phase 4：启动退化事件 | 展示 Event 101 原始数据、完整启动关联和目标匹配等级 | 已完成 |
 | Phase 5：趋势分析 | 分析最近完整启动的历史变化；首版查看最近 30 次启动及样本摘要 | 已实现，人工验收完成 |
-| Phase 6：诊断提示评估 | 在证据充分时给出可解释的观察或提示；不做无依据的单应用因果归因或自动系统修改 | 远期，需满足证据条件 |
+| Phase 6：诊断提示评估 | 汇总 Windows 明确记录的退化标记；不做无依据的单应用因果归因或自动系统修改 | 首版已实现，人工验收完成 |
 
 ### Phase 5 验收状态
 
 启动历史页和 CLI 默认展示最近 30 次确认的完整启动，并包含实测耗时趋势和样本摘要；CLI、JSON 和 GUI 已完成管理员 PowerShell 7 本机人工验收。自动化回归测试尚未运行。趋势只描述启动记录本身；Event 101 仍作为独立的 Windows 诊断记录，不据此推导单个程序造成的启动延迟。下一阶段为 Phase 6 诊断提示评估。
+
+### Phase 6 验收状态
+
+诊断观察首版只汇总最近完整实测启动中 Event 100 的 Windows 退化标记（已标记、未标记、未知），并显示最新记录的时间和 Event 100 Record ID。CLI、JSON 和 GUI 已完成人工验收；自动化回归测试尚未运行。它不推断具体原因或责任应用；Event 101 仍独立展示。后续如需扩展其他提示，须先确认有足够证据。
 
 ### 暂缓事项（独立于 Phase 5/6）
 
